@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nflRegularSeasonStartUtc, nflWeekForCommenceTime, selectEarliestUpcomingWeek } from "../src/ingestion.js";
+import { nflRegularSeasonStartUtc, nflWeekForCommenceTime, selectEarliestUpcomingWeek, spreadChanged } from "../src/ingestion.js";
 
 test("2026 NFL regular season start resolves to Thursday after Labor Day", () => {
   assert.equal(nflRegularSeasonStartUtc(2026).toISOString(), "2026-09-10T00:00:00.000Z");
@@ -44,4 +44,10 @@ test("already-started games are not selected for ingestion", () => {
   ], new Date("2026-09-12T00:00:00Z"));
 
   assert.deepEqual(selected.games.map((game) => game.id), ["future"]);
+});
+
+test("unchanged bookmaker spreads do not create a new snapshot", () => {
+  assert.equal(spreadChanged(null, -3.5), true);
+  assert.equal(spreadChanged(-3.5, -3.5), false);
+  assert.equal(spreadChanged(-3.5, -4), true);
 });
