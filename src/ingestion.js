@@ -40,6 +40,14 @@ export function selectEarliestUpcomingWeek(games, now = new Date()) {
   };
 }
 
+export function spreadChanged(latestSpread, incomingSpread) {
+  if (latestSpread === null || latestSpread === undefined) return true;
+  const previous = Number(latestSpread);
+  const incoming = Number(incomingSpread);
+  if (!Number.isFinite(previous) || !Number.isFinite(incoming)) return true;
+  return previous !== incoming;
+}
+
 async function latestSpreadForSource(db, gameId, source) {
   return db.prepare(`
     SELECT away_spread
@@ -83,7 +91,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
 
     for (const book of game.books ?? []) {
       const latest = await latestSpreadForSource(db, game.id, book.key);
-      if (latest && Number(latest.away_spread) === Number(book.awaySpread)) {
+      if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
         snapshotsUnchanged += 1;
         continue;
       }
