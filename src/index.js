@@ -1,9 +1,10 @@
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
+import { ingestWeeklySpreads } from "./ingestion.js";
 import { fetchNflSpreads } from "./odds.js";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,OPTIONS",
+  "access-control-allow-methods": "GET,POST,OPTIONS",
   "access-control-allow-headers": "content-type"
 };
 
@@ -91,7 +92,7 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.2.0",
+        version: "0.3.0",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY)
       });
@@ -122,6 +123,40 @@ export default {
         await logApiUsage(env, { requestType: "nfl_spreads", quota: error.quota, success: false });
         return json({
           error: "Unable to fetch NFL spreads",
+          message: error.message,
+          quota: error.quota ?? null
+        }, error.status && error.status >= 400 && error.status < 600 ? error.status : 502);
+      }
+    }
+
+    if (url.pathname === "/api/ingest/nfl" && request.method === "POST") {
+      if (!env.ODDS_API_KEY) return json({ error: "Odds API is not configured" }, 503);
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+
+      try {
+        const result = await fetchNflSpreads({ apiKey: env.ODDS_API_KEY });
+        const ingestion = await ingestWeeklySpreads(env.DB, result.games, new Date());
+        await logApiUsage(env, {
+          requestType: "nfl_ingest",
+          quota: result.quota,
+          triggerType: "manual",
+          success: true
+        });
+        return json({
+          ok: true,
+          fetchedAt: new Date().toISOString(),
+          quota: result.quota,
+          ingestion
+        }, 200, { "cache-control": "no-store" });
+      } catch (error) {
+        await logApiUsage(env, {
+          requestType: "nfl_ingest",
+          quota: error.quota,
+          triggerType: "manual",
+          success: false
+        });
+        return json({
+          error: "Unable to ingest NFL spreads",
           message: error.message,
           quota: error.quota ?? null
         }, error.status && error.status >= 400 && error.status < 600 ? error.status : 502);
