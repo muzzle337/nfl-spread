@@ -23,12 +23,18 @@ export function classifyGame(awaySpread, homeSpread) {
 
 export function settleAgainstSpread({ awaySpread, homeSpread, awayScore, homeScore }) {
   const classification = classifyGame(awaySpread, homeSpread);
-  const awayAdjusted = Number(awayScore) + Number(awaySpread);
-  const homeAdjusted = Number(homeScore) + Number(homeSpread);
-  if (![awayAdjusted, homeAdjusted].every(Number.isFinite)) throw new Error("Final scores are required");
-  if (awayAdjusted === homeAdjusted) return { result: "PUSH", coveringSide: "Push", ...classification };
-  const awayCovered = awayAdjusted > homeAdjusted;
-  const favoriteIsAway = Number(awaySpread) < 0;
+  const away = Number(awayScore);
+  const home = Number(homeScore);
+  const spread = Number(awaySpread);
+  if (![away, home, spread].every(Number.isFinite)) throw new Error("Final scores are required");
+
+  // Apply the away team's spread once. Because the home spread is the exact
+  // inverse, applying both sides would double-count the line.
+  const awayWithSpread = away + spread;
+  if (awayWithSpread === home) return { result: "PUSH", coveringSide: "Push", ...classification };
+
+  const awayCovered = awayWithSpread > home;
+  const favoriteIsAway = spread < 0;
   const favoriteCovered = awayCovered === favoriteIsAway;
   return {
     result: favoriteCovered ? "FAVORITE" : "UNDERDOG",
