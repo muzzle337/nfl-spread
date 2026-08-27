@@ -1,0 +1,2 @@
+# nfl-spread
+Spreader tool
