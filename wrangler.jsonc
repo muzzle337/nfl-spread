@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nfl-spread-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-27",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nfl-spread-db",
+      "database_id": "e155a2ba-ddb9-482c-a198-9b45e409e3b2"
+    }
+  ]
+}
