@@ -1,3 +1,4 @@
+import { adminIngestPage, isAdminAuthorized } from "./admin.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
 import { fetchNflSpreads } from "./odds.js";
@@ -5,7 +6,7 @@ import { fetchNflSpreads } from "./odds.js";
 const corsHeaders = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,OPTIONS",
-  "access-control-allow-headers": "content-type"
+  "access-control-allow-headers": "content-type,x-admin-token"
 };
 
 const json = (body, status = 200, extraHeaders = {}) => new Response(JSON.stringify(body), {
@@ -14,6 +15,14 @@ const json = (body, status = 200, extraHeaders = {}) => new Response(JSON.string
     "content-type": "application/json; charset=utf-8",
     ...corsHeaders,
     ...extraHeaders
+  }
+});
+
+const html = (body, status = 200) => new Response(body, {
+  status,
+  headers: {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store"
   }
 });
 
@@ -92,10 +101,15 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.3.0",
+        version: "0.3.1",
         database,
-        oddsApiConfigured: Boolean(env.ODDS_API_KEY)
+        oddsApiConfigured: Boolean(env.ODDS_API_KEY),
+        adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN)
       });
+    }
+
+    if (url.pathname === "/admin/ingest" && request.method === "GET") {
+      return html(adminIngestPage());
     }
 
     if (url.pathname === "/api/engine/demo") {
@@ -130,6 +144,8 @@ export default {
     }
 
     if (url.pathname === "/api/ingest/nfl" && request.method === "POST") {
+      const auth = isAdminAuthorized(request, env);
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
       if (!env.ODDS_API_KEY) return json({ error: "Odds API is not configured" }, 503);
       if (!env.DB) return json({ error: "Database is not bound" }, 503);
 
@@ -139,7 +155,7 @@ export default {
         await logApiUsage(env, {
           requestType: "nfl_ingest",
           quota: result.quota,
-          triggerType: "manual",
+          triggerType: "admin_page",
           success: true
         });
         return json({
@@ -152,7 +168,7 @@ export default {
         await logApiUsage(env, {
           requestType: "nfl_ingest",
           quota: error.quota,
-          triggerType: "manual",
+          triggerType: "admin_page",
           success: false
         });
         return json({
