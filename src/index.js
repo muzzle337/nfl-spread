@@ -102,7 +102,7 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.3.2",
+        version: "0.3.3",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
         adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN)
