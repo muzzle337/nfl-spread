@@ -10,7 +10,11 @@ export async function resolveDashboardWeek(db) {
     WHERE season_type = 'REGULAR'
   `).first();
 
-  const season = Number(latest?.season);
+  if (latest?.season === null || latest?.season === undefined || latest?.season === "") {
+    return { season: null, week: null };
+  }
+
+  const season = Number(latest.season);
   if (!Number.isInteger(season)) return { season: null, week: null };
 
   const result = await db.prepare(`
