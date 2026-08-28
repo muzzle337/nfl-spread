@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import worker, { APP_VERSION as PUBLIC_APP_VERSION, stabilizePwaVersionObserver } from "../src/pwa-entry.js";
+import worker, {
+  APP_VERSION as PUBLIC_APP_VERSION,
+  hardenServiceWorker,
+  stabilizePwaVersionObserver,
+  withPwaRecovery
+} from "../src/pwa-entry.js";
 import {
   APP_VERSION as PWA_BASE_VERSION,
   iconPng,
@@ -47,16 +52,6 @@ test("base service worker stays network-first and avoids API caching", () => {
   assert.match(script, /caches\.delete/);
 });
 
-test("PWA shell exposes manifest, apple icon, service worker, and app/API version UI", () => {
-  const page = withPwa("<!doctype html><html><head></head><body><div id=\"app\"></div></body></html>");
-  assert.match(page, /manifest\.webmanifest/);
-  assert.match(page, /apple-touch-icon/);
-  assert.match(page, /serviceWorker\.register/);
-  assert.match(page, /App v/);
-  assert.match(page, /API v/);
-  assert.match(page, /\/api\/health/);
-});
-
 test("hotfix prevents the version observer from watching its own descendant mutations", () => {
   const original = withPwa("<!doctype html><html><head></head><body><div id=\"app\"></div></body></html>");
   assert.match(original, /subtree: true/);
@@ -65,8 +60,37 @@ test("hotfix prevents the version observer from watching its own descendant muta
   assert.doesNotMatch(stabilized, /new MutationObserver\(mountVersion\)\.observe\(appRoot, \{ childList: true, subtree: true \}\)/);
 });
 
-test("public worker serves PWA assets and reports synchronized 0.8.1 version", async () => {
-  assert.equal(PUBLIC_APP_VERSION, "0.8.1");
+test("self-recovery shell checks API and service-worker versions without looping", () => {
+  const page = withPwaRecovery("<!doctype html><html><head></head><body><div id=\"app\"></div></body></html>");
+  assert.match(page, /\/api\/health\?client=/);
+  assert.match(page, /GET_VERSION/);
+  assert.match(page, /service-worker-version-mismatch/);
+  assert.match(page, /unresponsive-service-worker/);
+  assert.match(page, /recovered/);
+  assert.match(page, /data-pwa-reset/);
+  assert.match(page, /subtree:false/);
+});
+
+test("hardened service worker reports its public version", () => {
+  const script = hardenServiceWorker(serviceWorkerScript());
+  assert.match(script, /VERSION = "0\.8\.2"/);
+  assert.match(script, /GET_VERSION/);
+  assert.match(script, /version: "0\.8\.2"/);
+});
+
+test("recover route clears only this origin cache and storage then returns to current app", async () => {
+  const response = await worker.fetch(new Request("https://example.com/recover?reason=test"), {});
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("clear-site-data"), '"cache", "storage"');
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  const location = new URL(response.headers.get("location"));
+  assert.equal(location.pathname, "/");
+  assert.equal(location.searchParams.get("recovered"), "1");
+  assert.equal(location.searchParams.get("v"), "0.8.2");
+});
+
+test("public worker serves PWA assets and reports synchronized 0.8.2 version", async () => {
+  assert.equal(PUBLIC_APP_VERSION, "0.8.2");
 
   const manifestResponse = await worker.fetch(new Request("https://example.com/manifest.webmanifest"), {});
   assert.equal(manifestResponse.status, 200);
@@ -78,8 +102,9 @@ test("public worker serves PWA assets and reports synchronized 0.8.1 version", a
   assert.match(swResponse.headers.get("content-type"), /application\/javascript/);
   assert.equal(swResponse.headers.get("service-worker-allowed"), "/");
   const sw = await swResponse.text();
-  assert.match(sw, /VERSION = "0\.8\.1"/);
-  assert.doesNotMatch(sw, /VERSION = "0\.8\.0"/);
+  assert.match(sw, /VERSION = "0\.8\.2"/);
+  assert.doesNotMatch(sw, /VERSION = "0\.8\.1"/);
+  assert.match(sw, /GET_VERSION/);
 
   const iconResponse = await worker.fetch(new Request("https://example.com/icons/icon-192.png"), {});
   assert.equal(iconResponse.status, 200);
