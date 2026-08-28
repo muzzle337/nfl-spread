@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import worker, { APP_VERSION as PUBLIC_APP_VERSION } from "../src/pwa-entry.js";
+import worker, { APP_VERSION as PUBLIC_APP_VERSION, stabilizePwaVersionObserver } from "../src/pwa-entry.js";
 import {
   APP_VERSION as PWA_BASE_VERSION,
   iconPng,
@@ -57,8 +57,16 @@ test("PWA shell exposes manifest, apple icon, service worker, and app/API versio
   assert.match(page, /\/api\/health/);
 });
 
-test("public worker serves PWA assets and reports the synchronized 0.8 app version", async () => {
-  assert.equal(PUBLIC_APP_VERSION, "0.8.0");
+test("hotfix prevents the version observer from watching its own descendant mutations", () => {
+  const original = withPwa("<!doctype html><html><head></head><body><div id=\"app\"></div></body></html>");
+  assert.match(original, /subtree: true/);
+  const stabilized = stabilizePwaVersionObserver(original);
+  assert.match(stabilized, /subtree: false/);
+  assert.doesNotMatch(stabilized, /new MutationObserver\(mountVersion\)\.observe\(appRoot, \{ childList: true, subtree: true \}\)/);
+});
+
+test("public worker serves PWA assets and reports synchronized 0.8.1 version", async () => {
+  assert.equal(PUBLIC_APP_VERSION, "0.8.1");
 
   const manifestResponse = await worker.fetch(new Request("https://example.com/manifest.webmanifest"), {});
   assert.equal(manifestResponse.status, 200);
@@ -70,8 +78,8 @@ test("public worker serves PWA assets and reports the synchronized 0.8 app versi
   assert.match(swResponse.headers.get("content-type"), /application\/javascript/);
   assert.equal(swResponse.headers.get("service-worker-allowed"), "/");
   const sw = await swResponse.text();
-  assert.match(sw, /VERSION = "0\.8\.0"/);
-  assert.doesNotMatch(sw, /VERSION = "0\.7\.0"/);
+  assert.match(sw, /VERSION = "0\.8\.1"/);
+  assert.doesNotMatch(sw, /VERSION = "0\.8\.0"/);
 
   const iconResponse = await worker.fetch(new Request("https://example.com/icons/icon-192.png"), {});
   assert.equal(iconResponse.status, 200);
