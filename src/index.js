@@ -1,5 +1,7 @@
 import { adminIngestPage, isAdminAuthorized } from "./admin.js";
 import { consensusLinesForWeek } from "./consensus.js";
+import { dashboardSnapshot } from "./dashboard-data.js";
+import { dashboardPage } from "./dashboard.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
 import { fetchNflSpreads } from "./odds.js";
@@ -110,6 +112,10 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     const url = new URL(request.url);
 
+    if ((url.pathname === "/" || url.pathname === "/app") && request.method === "GET") {
+      return html(dashboardPage());
+    }
+
     if (url.pathname === "/api/health") {
       let database = "unbound";
       if (env.DB) {
@@ -123,12 +129,23 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.4.1",
+        version: "0.5.0",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
         adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN),
         resultsAutoSync: "daily_12:15_utc_when_final_due"
       });
+    }
+
+    if (url.pathname === "/api/dashboard/nfl" && request.method === "GET") {
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+      try {
+        return json({ ok: true, ...(await dashboardSnapshot(env.DB, new Date())) }, 200, {
+          "cache-control": "no-store"
+        });
+      } catch (error) {
+        return json({ error: "Dashboard data unavailable", message: error.message }, 503);
+      }
     }
 
     if (url.pathname === "/admin/ingest" && request.method === "GET") {
