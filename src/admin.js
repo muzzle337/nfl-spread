@@ -26,7 +26,8 @@ export function adminIngestPage() {
     p { line-height: 1.5; }
     label { display: block; font-weight: 600; margin-top: 18px; }
     input { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); }
-    button { margin-top: 16px; padding: 12px 16px; border: 0; border-radius: 10px; font-weight: 700; cursor: pointer; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    button { padding: 12px 16px; border: 0; border-radius: 10px; font-weight: 700; cursor: pointer; }
     button:disabled { opacity: .55; cursor: wait; }
     pre { white-space: pre-wrap; word-break: break-word; margin-top: 18px; padding: 14px; border-radius: 10px; background: color-mix(in srgb, CanvasText 7%, Canvas); min-height: 48px; }
     .note { font-size: .9rem; opacity: .8; }
@@ -35,22 +36,28 @@ export function adminIngestPage() {
 <body>
   <main>
     <div class="card">
-      <h1>NFL Spread Ingestion</h1>
-      <p>Imports the earliest upcoming NFL week and stores only new or changed bookmaker spreads.</p>
-      <p class="note">Opening this page uses no Odds API credits. Running ingestion normally uses one credit.</p>
+      <h1>NFL Spread Admin</h1>
+      <p>Update upcoming spreads or manually check final scores.</p>
+      <p class="note">Final scores are checked automatically every day at 12:15 UTC. The Worker checks D1 first and only calls the 3-day score feed when a stored game is at least 6 hours past kickoff and still lacks a final. If nothing is due, the automatic check uses 0 Odds API credits.</p>
+      <p class="note">Opening this page uses no Odds API credits. Spread ingestion normally uses 1 credit. A final-score API call normally uses 2 credits. The manual final-score button uses the same D1-first safeguard, so it also costs 0 credits when no result is due.</p>
       <label for="token">Admin key</label>
       <input id="token" type="password" autocomplete="current-password" placeholder="Enter admin key" />
-      <button id="run" type="button">Run ingestion</button>
+      <div class="actions">
+        <button id="run" type="button">Run spread ingestion</button>
+        <button id="results" type="button">Check final scores</button>
+      </div>
       <pre id="result">Ready.</pre>
     </div>
   </main>
   <script>
     const tokenInput = document.getElementById('token');
     const runButton = document.getElementById('run');
+    const resultsButton = document.getElementById('results');
     const result = document.getElementById('result');
+    const buttons = [runButton, resultsButton];
     tokenInput.value = sessionStorage.getItem('nflSpreadAdminToken') || '';
 
-    runButton.addEventListener('click', async () => {
+    async function runAdminAction(path, message) {
       const token = tokenInput.value.trim();
       if (!token) {
         result.textContent = 'Enter the admin key first.';
@@ -58,11 +65,11 @@ export function adminIngestPage() {
       }
 
       sessionStorage.setItem('nflSpreadAdminToken', token);
-      runButton.disabled = true;
-      result.textContent = 'Running ingestion…';
+      buttons.forEach((button) => { button.disabled = true; });
+      result.textContent = message;
 
       try {
-        const response = await fetch('/api/ingest/nfl', {
+        const response = await fetch(path, {
           method: 'POST',
           headers: { 'x-admin-token': token }
         });
@@ -71,9 +78,12 @@ export function adminIngestPage() {
       } catch (error) {
         result.textContent = JSON.stringify({ error: error.message }, null, 2);
       } finally {
-        runButton.disabled = false;
+        buttons.forEach((button) => { button.disabled = false; });
       }
-    });
+    }
+
+    runButton.addEventListener('click', () => runAdminAction('/api/ingest/nfl', 'Running spread ingestion…'));
+    resultsButton.addEventListener('click', () => runAdminAction('/api/ingest/nfl/results', 'Checking final scores…'));
   </script>
 </body>
 </html>`;

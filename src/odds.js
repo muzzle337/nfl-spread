@@ -27,6 +27,20 @@ export function buildNflSpreadsUrl(apiKey) {
   return url;
 }
 
+export function buildNflScoresUrl(apiKey, daysFrom = 3) {
+  if (!apiKey) throw new Error("ODDS_API_KEY is not configured");
+  const days = Number(daysFrom);
+  if (!Number.isInteger(days) || days < 1 || days > 3) {
+    throw new Error("daysFrom must be an integer from 1 to 3");
+  }
+
+  const url = new URL(`${ODDS_API_BASE}/sports/${NFL_SPORT_KEY}/scores`);
+  url.searchParams.set("apiKey", apiKey);
+  url.searchParams.set("daysFrom", String(days));
+  url.searchParams.set("dateFormat", "iso");
+  return url;
+}
+
 export function normalizeNflSpreads(events) {
   if (!Array.isArray(events)) return [];
 
@@ -62,8 +76,35 @@ export function normalizeNflSpreads(events) {
   });
 }
 
-export async function fetchNflSpreads({ apiKey, fetchImpl = fetch }) {
-  const url = buildNflSpreadsUrl(apiKey);
+export function normalizeNflScores(events) {
+  if (!Array.isArray(events)) return [];
+
+  return events.map((event) => {
+    const scores = Array.isArray(event.scores) ? event.scores : [];
+    const away = scores.find((score) => score.name === event.away_team);
+    const home = scores.find((score) => score.name === event.home_team);
+    const awayScore = away?.score === null || away?.score === undefined || away?.score === ""
+      ? null
+      : Number(away.score);
+    const homeScore = home?.score === null || home?.score === undefined || home?.score === ""
+      ? null
+      : Number(home.score);
+
+    return {
+      id: event.id,
+      sportKey: event.sport_key,
+      commenceTime: event.commence_time,
+      awayTeam: event.away_team,
+      homeTeam: event.home_team,
+      completed: event.completed === true,
+      awayScore: Number.isFinite(awayScore) ? awayScore : null,
+      homeScore: Number.isFinite(homeScore) ? homeScore : null,
+      lastUpdate: event.last_update ?? null
+    };
+  });
+}
+
+async function fetchOddsApiJson(url, fetchImpl) {
   const response = await fetchImpl(url.toString(), { headers: { accept: "application/json" } });
   const quota = quotaFromHeaders(response.headers);
   const payload = await response.json().catch(() => null);
@@ -76,8 +117,25 @@ export async function fetchNflSpreads({ apiKey, fetchImpl = fetch }) {
     throw error;
   }
 
+  return { payload, quota };
+}
+
+export async function fetchNflSpreads({ apiKey, fetchImpl = fetch }) {
+  const url = buildNflSpreadsUrl(apiKey);
+  const { payload, quota } = await fetchOddsApiJson(url, fetchImpl);
+
   return {
     games: normalizeNflSpreads(payload),
+    quota
+  };
+}
+
+export async function fetchNflScores({ apiKey, daysFrom = 3, fetchImpl = fetch }) {
+  const url = buildNflScoresUrl(apiKey, daysFrom);
+  const { payload, quota } = await fetchOddsApiJson(url, fetchImpl);
+
+  return {
+    games: normalizeNflScores(payload),
     quota
   };
 }
