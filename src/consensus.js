@@ -1,18 +1,26 @@
-export function median(values) {
-  const numbers = (Array.isArray(values) ? values : [])
+function validSpreadNumbers(values) {
+  return (Array.isArray(values) ? values : [])
+    .filter((value) => value !== null && value !== undefined && value !== "")
     .map(Number)
     .filter(Number.isFinite)
     .sort((a, b) => a - b);
+}
 
+export function median(values) {
+  const numbers = validSpreadNumbers(values);
   if (!numbers.length) return null;
-  const middle = Math.floor(numbers.length / 2);
-  if (numbers.length % 2 === 1) return numbers[middle];
-  return (numbers[middle - 1] + numbers[middle]) / 2;
+
+  // Nearest-rank 50th percentile. For an even number of books this selects
+  // the lower of the two middle market lines instead of inventing a quarter
+  // point (for example, -1.25). The result is always a line actually offered
+  // by at least one sportsbook in the current market snapshot.
+  const medianIndex = Math.ceil(numbers.length * 0.5) - 1;
+  return numbers[medianIndex];
 }
 
 export function consensusForGame(game, latestBooks) {
   const books = (Array.isArray(latestBooks) ? latestBooks : [])
-    .filter((book) => Number.isFinite(Number(book.away_spread)))
+    .filter((book) => book.away_spread !== null && book.away_spread !== undefined && Number.isFinite(Number(book.away_spread)))
     .map((book) => ({
       source: book.source,
       awaySpread: Number(book.away_spread),
@@ -80,7 +88,7 @@ export async function consensusLinesForWeek(db, season, week) {
     season: seasonNumber,
     week: weekNumber,
     gameCount: output.length,
-    consensusMethod: "median_latest_bookmaker_spreads",
+    consensusMethod: "nearest_rank_median_latest_bookmaker_spreads",
     games: output
   };
 }
