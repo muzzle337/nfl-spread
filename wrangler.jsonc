@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nfl-spread-api",
-  "main": "src/index.js",
+  "main": "src/pwa-entry.js",
   "compatibility_date": "2026-08-27",
   "triggers": {
     "crons": ["35 * * * *", "15 12 * * *"]
