@@ -30,6 +30,11 @@ export function consensusForGame(game, latestBooks) {
 
   const awaySpreads = books.map((book) => book.awaySpread);
   const medianAwaySpread = median(awaySpreads);
+  const medianHomeSpread = medianAwaySpread === null
+    ? null
+    : medianAwaySpread === 0
+      ? 0
+      : -medianAwaySpread;
 
   return {
     id: game.id,
@@ -41,7 +46,7 @@ export function consensusForGame(game, latestBooks) {
     kickoffAt: game.kickoff_at,
     status: game.status,
     medianAwaySpread,
-    medianHomeSpread: medianAwaySpread === null ? null : -medianAwaySpread,
+    medianHomeSpread,
     bookmakerCount: books.length,
     minAwaySpread: awaySpreads.length ? Math.min(...awaySpreads) : null,
     maxAwaySpread: awaySpreads.length ? Math.max(...awaySpreads) : null,
