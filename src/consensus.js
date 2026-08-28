@@ -6,16 +6,38 @@ function validSpreadNumbers(values) {
     .sort((a, b) => a - b);
 }
 
+function countValue(numbers, target) {
+  return numbers.reduce((count, value) => count + (value === target ? 1 : 0), 0);
+}
+
 export function median(values) {
   const numbers = validSpreadNumbers(values);
   if (!numbers.length) return null;
 
-  // Nearest-rank 50th percentile. For an even number of books this selects
-  // the lower of the two middle market lines instead of inventing a quarter
-  // point (for example, -1.25). The result is always a line actually offered
-  // by at least one sportsbook in the current market snapshot.
-  const medianIndex = Math.ceil(numbers.length * 0.5) - 1;
-  return numbers[medianIndex];
+  const middle = Math.floor(numbers.length / 2);
+  if (numbers.length % 2 === 1) return numbers[middle];
+
+  const lowerMiddle = numbers[middle - 1];
+  const upperMiddle = numbers[middle];
+  if (lowerMiddle === upperMiddle) return lowerMiddle;
+
+  // For an even number of books, never average the two middle lines. Prefer
+  // whichever actual middle market line is offered by more sportsbooks.
+  const lowerCount = countValue(numbers, lowerMiddle);
+  const upperCount = countValue(numbers, upperMiddle);
+  if (lowerCount > upperCount) return lowerMiddle;
+  if (upperCount > lowerCount) return upperMiddle;
+
+  // If both middle lines are equally common, use the line closest to pick'em
+  // so the tiebreak does not systematically make the market spread larger.
+  const lowerDistance = Math.abs(lowerMiddle);
+  const upperDistance = Math.abs(upperMiddle);
+  if (lowerDistance < upperDistance) return lowerMiddle;
+  if (upperDistance < lowerDistance) return upperMiddle;
+
+  // Perfectly symmetric favorite-flip markets are exceptionally rare. Keep a
+  // deterministic result while still returning an actual offered line.
+  return lowerMiddle;
 }
 
 export function consensusForGame(game, latestBooks) {
@@ -93,7 +115,8 @@ export async function consensusLinesForWeek(db, season, week) {
     season: seasonNumber,
     week: weekNumber,
     gameCount: output.length,
-    consensusMethod: "nearest_rank_median_latest_bookmaker_spreads",
+    consensusMethod: "median_latest_bookmaker_spreads_with_frequency_tiebreak",
+    consensusTieRule: "more_common_middle_line_then_closest_to_pickem",
     games: output
   };
 }
