@@ -290,12 +290,13 @@ export async function projectionsForWeek(db, season, week) {
     week: weekNumber,
     seasonType: "REGULAR",
     gameCount: games.length,
+    projectionBasis: "current_season_completed_prior_weeks",
     statsThroughWeek: weekNumber - 1,
     currentSeasonOnly: true,
     tierDefinitions: TIER_DEFINITIONS,
     thresholds,
-    historicalGamesConsidered: stats.gamesConsidered,
-    historicalGamesSkipped: stats.gamesSkipped + history.skippedWithoutLine,
+    currentSeasonGamesConsidered: stats.gamesConsidered,
+    currentSeasonGamesSkipped: stats.gamesSkipped + history.skippedWithoutLine,
     focusCount: games.filter((game) => game.focus).length,
     games
   };
