@@ -73,9 +73,9 @@ test("self-recovery shell checks API and service-worker versions without looping
 
 test("hardened service worker reports its public version", () => {
   const script = hardenServiceWorker(serviceWorkerScript());
-  assert.match(script, /VERSION = "0\.8\.2"/);
+  assert.match(script, /VERSION = "0\.9\.0"/);
   assert.match(script, /GET_VERSION/);
-  assert.match(script, /version: "0\.8\.2"/);
+  assert.match(script, /version: "0\.9\.0"/);
 });
 
 test("recover route clears only this origin cache and storage then returns to current app", async () => {
@@ -86,31 +86,27 @@ test("recover route clears only this origin cache and storage then returns to cu
   const location = new URL(response.headers.get("location"));
   assert.equal(location.pathname, "/");
   assert.equal(location.searchParams.get("recovered"), "1");
-  assert.equal(location.searchParams.get("v"), "0.8.2");
+  assert.equal(location.searchParams.get("v"), "0.9.0");
 });
 
-test("public worker serves PWA assets and reports synchronized 0.8.2 version", async () => {
-  assert.equal(PUBLIC_APP_VERSION, "0.8.2");
-
+test("public worker serves PWA assets and reports synchronized 0.9.0 version", async () => {
+  assert.equal(PUBLIC_APP_VERSION, "0.9.0");
   const manifestResponse = await worker.fetch(new Request("https://example.com/manifest.webmanifest"), {});
   assert.equal(manifestResponse.status, 200);
   assert.match(manifestResponse.headers.get("content-type"), /application\/manifest\+json/);
   assert.equal((await manifestResponse.json()).display, "standalone");
-
   const swResponse = await worker.fetch(new Request("https://example.com/sw.js"), {});
   assert.equal(swResponse.status, 200);
   assert.match(swResponse.headers.get("content-type"), /application\/javascript/);
   assert.equal(swResponse.headers.get("service-worker-allowed"), "/");
   const sw = await swResponse.text();
-  assert.match(sw, /VERSION = "0\.8\.2"/);
-  assert.doesNotMatch(sw, /VERSION = "0\.8\.1"/);
+  assert.match(sw, /VERSION = "0\.9\.0"/);
+  assert.doesNotMatch(sw, /VERSION = "0\.8\.2"/);
   assert.match(sw, /GET_VERSION/);
-
   const iconResponse = await worker.fetch(new Request("https://example.com/icons/icon-192.png"), {});
   assert.equal(iconResponse.status, 200);
   assert.equal(iconResponse.headers.get("content-type"), "image/png");
   assert.deepEqual(pngSize(new Uint8Array(await iconResponse.arrayBuffer())), { width: 192, height: 192 });
-
   const healthResponse = await worker.fetch(new Request("https://example.com/api/health"), {});
   assert.equal(healthResponse.status, 200);
   assert.equal((await healthResponse.json()).version, PUBLIC_APP_VERSION);
