@@ -53,6 +53,22 @@ Once a game starts it is no longer refreshed. Every changed bookmaker line is pr
 
 Final-score checks remain separate. The system checks D1 first and only calls the paid score feed when a stored game should already have a final.
 
+## Install as an app
+
+The site includes a web app manifest, app icons, and a service worker so supported browsers can install it as a standalone PWA.
+
+On iPhone, open the live URL in Safari and use **Share → Add to Home Screen**. The installed app opens without the normal browser chrome.
+
+The service worker uses network-first navigation and never caches API responses. New releases replace the old versioned shell cache and reload when the new worker takes control.
+
+## Version check
+
+The bottom of **Tools** shows:
+
+**NFL Spread Tool · App vX.X.X · API vX.X.X**
+
+Normally the two versions should match. A mismatch means the phone has an older frontend loaded while the API has already deployed a newer version.
+
 ## Tools
 
 - **Update Lines:** manually pull fresh sportsbook spreads
