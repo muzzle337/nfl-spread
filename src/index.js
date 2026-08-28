@@ -3,10 +3,14 @@ import { consensusLinesForWeek } from "./consensus.js";
 import { dashboardSnapshot } from "./dashboard-data.js";
 import { dashboardPage } from "./dashboard.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
+import { withHelpGuide } from "./help.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
 import { fetchNflSpreads } from "./odds.js";
 import { projectionsForWeek } from "./projection.js";
 import { resultsIntegrity, syncResultsIfDue, weekResultsStatus } from "./result-sync.js";
+import { SPREAD_REFRESH_CRON, spreadRefreshStatus, syncSpreadsIfDue } from "./spread-sync.js";
+
+const RESULTS_REFRESH_CRON = "15 12 * * *";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -107,13 +111,32 @@ async function runGuardedResultsSync(env, { triggerType, now = new Date() }) {
   return result;
 }
 
+async function runGuardedSpreadSync(env, { triggerType, now = new Date() }) {
+  const result = await syncSpreadsIfDue({
+    db: env.DB,
+    apiKey: env.ODDS_API_KEY,
+    now
+  });
+
+  if (result.apiCalled) {
+    await logApiUsage(env, {
+      requestType: "nfl_auto_spreads",
+      quota: result.quota,
+      triggerType,
+      success: true
+    });
+  }
+
+  return result;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     const url = new URL(request.url);
 
     if ((url.pathname === "/" || url.pathname === "/app") && request.method === "GET") {
-      return html(dashboardPage());
+      return html(withHelpGuide(dashboardPage()));
     }
 
     if (url.pathname === "/api/health") {
@@ -129,10 +152,11 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.5.0",
+        version: "0.6.0",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
         adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN),
+        spreadAutoSync: "hourly_guard_adaptive_24h_12h_6h_2h",
         resultsAutoSync: "daily_12:15_utc_when_final_due"
       });
     }
@@ -145,6 +169,17 @@ export default {
         });
       } catch (error) {
         return json({ error: "Dashboard data unavailable", message: error.message }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/spreads/status" && request.method === "GET") {
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+      try {
+        return json({ ok: true, ...(await spreadRefreshStatus(env.DB, new Date())) }, 200, {
+          "cache-control": "no-store"
+        });
+      } catch (error) {
+        return json({ error: "Spread refresh status unavailable", message: error.message }, 400);
       }
     }
 
@@ -321,34 +356,73 @@ export default {
 
   scheduled(controller, env, ctx) {
     const now = new Date(controller.scheduledTime ?? Date.now());
+    const cron = controller.cron ?? "";
+
     ctx.waitUntil((async () => {
-      if (!env.DB || !env.ODDS_API_KEY) {
-        console.error("Scheduled result sync skipped: DB or ODDS_API_KEY is not configured");
+      if (!env.DB) {
+        console.error("Scheduled sync skipped: DB is not configured");
         return;
       }
 
-      try {
-        const sync = await runGuardedResultsSync(env, {
-          triggerType: "scheduled_daily",
-          now
-        });
-        console.log("Scheduled result sync", JSON.stringify({
-          apiCalled: sync.apiCalled,
-          reason: sync.reason,
-          missingBefore: sync.integrityBefore?.missingCount ?? null,
-          missingAfter: sync.integrityAfter?.missingCount ?? null
-        }));
-      } catch (error) {
-        if (error.quota) {
-          await logApiUsage(env, {
-            requestType: "nfl_results",
-            quota: error.quota,
-            triggerType: "scheduled_daily",
-            success: false
+      if (cron === SPREAD_REFRESH_CRON) {
+        try {
+          const sync = await runGuardedSpreadSync(env, {
+            triggerType: "scheduled_auto",
+            now
           });
+          console.log("Scheduled spread sync", JSON.stringify({
+            apiCalled: sync.apiCalled,
+            reason: sync.reason,
+            hoursToKickoff: sync.status?.hoursToKickoff ?? null,
+            refreshIntervalHours: sync.status?.refreshIntervalHours ?? null,
+            snapshotsInserted: sync.ingestion?.snapshotsInserted ?? null
+          }));
+        } catch (error) {
+          if (error.quota) {
+            await logApiUsage(env, {
+              requestType: "nfl_auto_spreads",
+              quota: error.quota,
+              triggerType: "scheduled_auto",
+              success: false
+            });
+          }
+          console.error("Scheduled spread sync failed", error);
         }
-        console.error("Scheduled result sync failed", error);
+        return;
       }
+
+      if (cron === RESULTS_REFRESH_CRON) {
+        if (!env.ODDS_API_KEY) {
+          console.error("Scheduled result sync skipped: ODDS_API_KEY is not configured");
+          return;
+        }
+
+        try {
+          const sync = await runGuardedResultsSync(env, {
+            triggerType: "scheduled_daily",
+            now
+          });
+          console.log("Scheduled result sync", JSON.stringify({
+            apiCalled: sync.apiCalled,
+            reason: sync.reason,
+            missingBefore: sync.integrityBefore?.missingCount ?? null,
+            missingAfter: sync.integrityAfter?.missingCount ?? null
+          }));
+        } catch (error) {
+          if (error.quota) {
+            await logApiUsage(env, {
+              requestType: "nfl_results",
+              quota: error.quota,
+              triggerType: "scheduled_daily",
+              success: false
+            });
+          }
+          console.error("Scheduled result sync failed", error);
+        }
+        return;
+      }
+
+      console.error("Scheduled sync skipped: unrecognized cron", cron);
     })());
   }
 };

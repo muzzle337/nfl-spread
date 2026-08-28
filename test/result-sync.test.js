@@ -211,7 +211,7 @@ test("weekly results status distinguishes completed, awaiting, and overdue missi
   assert.equal(status.missing[0].id, "missing");
 });
 
-test("Cloudflare cron runs the guarded results check once daily at 12:15 UTC", () => {
+test("Cloudflare cron keeps the guarded results check once daily at 12:15 UTC", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"crons"\s*:\s*\[\s*"15 12 \* \* \*"\s*\]/);
+  assert.match(config, /"15 12 \* \* \*"/);
 });
