@@ -29,7 +29,7 @@ test("admin ingest rejects an incorrect token", () => {
 });
 
 test("admin ingest accepts the configured token", () => {
-  const request = new Request("https://example.com/api/ingest/nfl", {
+  const request = new Request("https://example.com/api/ingest/nfl/results", {
     method: "POST",
     headers: { "x-admin-token": "correct" }
   });
@@ -37,9 +37,13 @@ test("admin ingest accepts the configured token", () => {
   assert.deepEqual(isAdminAuthorized(request, { INGEST_ADMIN_TOKEN: "correct" }), { ok: true });
 });
 
-test("admin page uses POST and never embeds an admin token", () => {
+test("admin page uses protected POST actions and never embeds an admin token", () => {
   const page = adminIngestPage();
   assert.match(page, /method:\s*'POST'/);
   assert.match(page, /x-admin-token/);
+  assert.match(page, /\/api\/ingest\/nfl'/);
+  assert.match(page, /\/api\/ingest\/nfl\/results'/);
+  assert.match(page, /Sync final scores/);
+  assert.match(page, /2 credits/);
   assert.doesNotMatch(page, /INGEST_ADMIN_TOKEN/);
 });
