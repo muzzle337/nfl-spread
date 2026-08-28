@@ -6,13 +6,18 @@ test("median returns the middle sportsbook line for an odd number of books", () 
   assert.equal(median([-2, -1.5, -1]), -1.5);
 });
 
-test("median averages the two middle sportsbook lines for an even number of books", () => {
-  assert.equal(median([-2, -1.5, -1, -0.5]), -1.25);
+test("median returns an actual market line for an even number of books", () => {
+  assert.equal(median([-2, -1.5, -1, -0.5]), -1.5);
 });
 
-test("median ignores non-numeric values and returns null when no valid lines exist", () => {
-  assert.equal(median([-3, null, "bad", -2]), -2.5);
-  assert.equal(median([null, "bad"]), null);
+test("median never invents a quarter-point spread", () => {
+  assert.equal(median([-1.5, -1]), -1.5);
+  assert.notEqual(median([-1.5, -1]), -1.25);
+});
+
+test("median ignores null, empty, and non-numeric values", () => {
+  assert.equal(median([-3, null, "", "bad", -2]), -3);
+  assert.equal(median([null, "", "bad"]), null);
 });
 
 test("consensus uses each latest bookmaker line and preserves audit details", () => {
