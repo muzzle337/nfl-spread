@@ -37,13 +37,14 @@ export function adminIngestPage() {
   <main>
     <div class="card">
       <h1>NFL Spread Admin</h1>
-      <p>Update upcoming spreads or sync final scores for recently completed NFL games.</p>
-      <p class="note">Opening this page uses no Odds API credits. Spread ingestion normally uses 1 credit. Final-score sync requests up to the last 3 days and normally uses 2 credits.</p>
+      <p>Update upcoming spreads or manually check final scores.</p>
+      <p class="note">Final scores are checked automatically every day at 12:15 UTC. The Worker checks D1 first and only calls the 3-day score feed when a stored game is at least 6 hours past kickoff and still lacks a final. If nothing is due, the automatic check uses 0 Odds API credits.</p>
+      <p class="note">Opening this page uses no Odds API credits. Spread ingestion normally uses 1 credit. A final-score API call normally uses 2 credits. The manual final-score button uses the same D1-first safeguard, so it also costs 0 credits when no result is due.</p>
       <label for="token">Admin key</label>
       <input id="token" type="password" autocomplete="current-password" placeholder="Enter admin key" />
       <div class="actions">
         <button id="run" type="button">Run spread ingestion</button>
-        <button id="results" type="button">Sync final scores</button>
+        <button id="results" type="button">Check final scores</button>
       </div>
       <pre id="result">Ready.</pre>
     </div>
@@ -82,7 +83,7 @@ export function adminIngestPage() {
     }
 
     runButton.addEventListener('click', () => runAdminAction('/api/ingest/nfl', 'Running spread ingestion…'));
-    resultsButton.addEventListener('click', () => runAdminAction('/api/ingest/nfl/results', 'Syncing final scores…'));
+    resultsButton.addEventListener('click', () => runAdminAction('/api/ingest/nfl/results', 'Checking final scores…'));
   </script>
 </body>
 </html>`;
