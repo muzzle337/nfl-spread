@@ -2,8 +2,9 @@ import { adminIngestPage, isAdminAuthorized } from "./admin.js";
 import { consensusLinesForWeek } from "./consensus.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
-import { fetchNflSpreads } from "./odds.js";
+import { fetchNflScores, fetchNflSpreads } from "./odds.js";
 import { projectionsForWeek } from "./projection.js";
+import { ingestCompletedScores } from "./results.js";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -103,7 +104,7 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.4.0",
+        version: "0.4.1",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
         adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN)
@@ -205,6 +206,43 @@ export default {
         });
         return json({
           error: "Unable to ingest NFL spreads",
+          message: error.message,
+          quota: error.quota ?? null
+        }, error.status && error.status >= 400 && error.status < 600 ? error.status : 502);
+      }
+    }
+
+    if (url.pathname === "/api/ingest/nfl/results" && request.method === "POST") {
+      const auth = isAdminAuthorized(request, env);
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      if (!env.ODDS_API_KEY) return json({ error: "Odds API is not configured" }, 503);
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+
+      try {
+        const result = await fetchNflScores({ apiKey: env.ODDS_API_KEY, daysFrom: 3 });
+        const ingestion = await ingestCompletedScores(env.DB, result.games);
+        await logApiUsage(env, {
+          requestType: "nfl_results",
+          quota: result.quota,
+          triggerType: "admin_page",
+          success: true
+        });
+        return json({
+          ok: true,
+          fetchedAt: new Date().toISOString(),
+          lookbackDays: 3,
+          quota: result.quota,
+          ingestion
+        }, 200, { "cache-control": "no-store" });
+      } catch (error) {
+        await logApiUsage(env, {
+          requestType: "nfl_results",
+          quota: error.quota,
+          triggerType: "admin_page",
+          success: false
+        });
+        return json({
+          error: "Unable to ingest NFL results",
           message: error.message,
           quota: error.quota ?? null
         }, error.status && error.status >= 400 && error.status < 600 ? error.status : 502);
