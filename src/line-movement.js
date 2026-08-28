@@ -110,3 +110,36 @@ export async function lineMovementForGame(db, gameId) {
 
   return summarizeLineMovement(game, result.results ?? []);
 }
+
+export async function lineMovementsForWeek(db, season, week) {
+  if (!db) throw new Error("Database is not bound");
+  const year = Number(season);
+  const weekNumber = Number(week);
+  if (!Number.isInteger(year) || !Number.isInteger(weekNumber)) throw new Error("season and week are required");
+
+  const gamesResult = await db.prepare(`
+    SELECT id, season, week, away_team, home_team, kickoff_at, status, closing_away_spread
+    FROM games
+    WHERE season = ? AND week = ? AND season_type = 'REGULAR'
+    ORDER BY kickoff_at ASC, id ASC
+  `).bind(year, weekNumber).all();
+  const games = gamesResult.results ?? [];
+  if (!games.length) return [];
+
+  const snapshotsResult = await db.prepare(`
+    SELECT ls.id, ls.game_id, ls.source, ls.away_spread, ls.captured_at
+    FROM line_snapshots ls
+    JOIN games g ON g.id = ls.game_id
+    WHERE g.season = ? AND g.week = ? AND g.season_type = 'REGULAR'
+    ORDER BY ls.id ASC
+  `).bind(year, weekNumber).all();
+
+  const byGame = new Map();
+  for (const row of snapshotsResult.results ?? []) {
+    const id = String(row.game_id);
+    if (!byGame.has(id)) byGame.set(id, []);
+    byGame.get(id).push(row);
+  }
+
+  return games.map((game) => summarizeLineMovement(game, byGame.get(String(game.id)) ?? []));
+}
