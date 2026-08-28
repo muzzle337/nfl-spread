@@ -3,6 +3,7 @@ import { consensusLinesForWeek } from "./consensus.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
 import { fetchNflSpreads } from "./odds.js";
+import { projectionsForWeek } from "./projection.js";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -102,7 +103,7 @@ export default {
       return json({
         ok: true,
         service: "nfl-spread-api",
-        version: "0.3.3",
+        version: "0.4.0",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
         adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN)
@@ -133,6 +134,21 @@ export default {
         });
       } catch (error) {
         return json({ error: "Consensus lines unavailable", message: error.message }, 400);
+      }
+    }
+
+    if (url.pathname === "/api/projections/nfl" && request.method === "GET") {
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+      const season = url.searchParams.get("season");
+      const week = url.searchParams.get("week");
+      if (!season || !week) return json({ error: "season and week are required" }, 400);
+
+      try {
+        return json({ ok: true, ...(await projectionsForWeek(env.DB, season, week)) }, 200, {
+          "cache-control": "no-store"
+        });
+      } catch (error) {
+        return json({ error: "Projection data unavailable", message: error.message }, 400);
       }
     }
 
