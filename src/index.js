@@ -2,9 +2,9 @@ import { adminIngestPage, isAdminAuthorized } from "./admin.js";
 import { consensusLinesForWeek } from "./consensus.js";
 import { classifyGame, focusGrade, settleAgainstSpread } from "./engine.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
-import { fetchNflScores, fetchNflSpreads } from "./odds.js";
+import { fetchNflSpreads } from "./odds.js";
 import { projectionsForWeek } from "./projection.js";
-import { ingestCompletedScores } from "./results.js";
+import { resultsIntegrity, syncResultsIfDue, weekResultsStatus } from "./result-sync.js";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -86,6 +86,25 @@ async function usageSummary(env) {
   };
 }
 
+async function runGuardedResultsSync(env, { triggerType, now = new Date() }) {
+  const result = await syncResultsIfDue({
+    db: env.DB,
+    apiKey: env.ODDS_API_KEY,
+    now
+  });
+
+  if (result.apiCalled) {
+    await logApiUsage(env, {
+      requestType: "nfl_results",
+      quota: result.quota,
+      triggerType,
+      success: true
+    });
+  }
+
+  return result;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -107,7 +126,8 @@ export default {
         version: "0.4.1",
         database,
         oddsApiConfigured: Boolean(env.ODDS_API_KEY),
-        adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN)
+        adminIngestConfigured: Boolean(env.INGEST_ADMIN_TOKEN),
+        resultsAutoSync: "daily_12:15_utc_when_final_due"
       });
     }
 
@@ -150,6 +170,32 @@ export default {
         });
       } catch (error) {
         return json({ error: "Projection data unavailable", message: error.message }, 400);
+      }
+    }
+
+    if (url.pathname === "/api/results/status" && request.method === "GET") {
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+      const season = url.searchParams.get("season");
+      const week = url.searchParams.get("week");
+      if (!season || !week) return json({ error: "season and week are required" }, 400);
+
+      try {
+        return json({ ok: true, ...(await weekResultsStatus(env.DB, season, week, new Date())) }, 200, {
+          "cache-control": "no-store"
+        });
+      } catch (error) {
+        return json({ error: "Results status unavailable", message: error.message }, 400);
+      }
+    }
+
+    if (url.pathname === "/api/results/integrity" && request.method === "GET") {
+      if (!env.DB) return json({ error: "Database is not bound" }, 503);
+      try {
+        return json({ ok: true, ...(await resultsIntegrity(env.DB, new Date())) }, 200, {
+          "cache-control": "no-store"
+        });
+      } catch (error) {
+        return json({ error: "Results integrity unavailable", message: error.message }, 400);
       }
     }
 
@@ -219,28 +265,24 @@ export default {
       if (!env.DB) return json({ error: "Database is not bound" }, 503);
 
       try {
-        const result = await fetchNflScores({ apiKey: env.ODDS_API_KEY, daysFrom: 3 });
-        const ingestion = await ingestCompletedScores(env.DB, result.games);
-        await logApiUsage(env, {
-          requestType: "nfl_results",
-          quota: result.quota,
+        const sync = await runGuardedResultsSync(env, {
           triggerType: "admin_page",
-          success: true
+          now: new Date()
         });
         return json({
           ok: true,
-          fetchedAt: new Date().toISOString(),
-          lookbackDays: 3,
-          quota: result.quota,
-          ingestion
+          checkedAt: new Date().toISOString(),
+          ...sync
         }, 200, { "cache-control": "no-store" });
       } catch (error) {
-        await logApiUsage(env, {
-          requestType: "nfl_results",
-          quota: error.quota,
-          triggerType: "admin_page",
-          success: false
-        });
+        if (error.quota) {
+          await logApiUsage(env, {
+            requestType: "nfl_results",
+            quota: error.quota,
+            triggerType: "admin_page",
+            success: false
+          });
+        }
         return json({
           error: "Unable to ingest NFL results",
           message: error.message,
@@ -258,5 +300,38 @@ export default {
     }
 
     return json({ error: "Not found" }, 404);
+  },
+
+  scheduled(controller, env, ctx) {
+    const now = new Date(controller.scheduledTime ?? Date.now());
+    ctx.waitUntil((async () => {
+      if (!env.DB || !env.ODDS_API_KEY) {
+        console.error("Scheduled result sync skipped: DB or ODDS_API_KEY is not configured");
+        return;
+      }
+
+      try {
+        const sync = await runGuardedResultsSync(env, {
+          triggerType: "scheduled_daily",
+          now
+        });
+        console.log("Scheduled result sync", JSON.stringify({
+          apiCalled: sync.apiCalled,
+          reason: sync.reason,
+          missingBefore: sync.integrityBefore?.missingCount ?? null,
+          missingAfter: sync.integrityAfter?.missingCount ?? null
+        }));
+      } catch (error) {
+        if (error.quota) {
+          await logApiUsage(env, {
+            requestType: "nfl_results",
+            quota: error.quota,
+            triggerType: "scheduled_daily",
+            success: false
+          });
+        }
+        console.error("Scheduled result sync failed", error);
+      }
+    })());
   }
 };
