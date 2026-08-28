@@ -38,6 +38,20 @@ There is intentionally no minimum sample-size gate. The app always shows the sam
 - **Sample:** completed 2026 decisions behind the percentage
 - **Focus:** games whose matching current-season pattern is at least 55%
 
+## Line movement
+
+Tap a game to see **First Captured → Current → Close**.
+
+- **First Captured:** median of the first stored line we have from each sportsbook
+- **Current:** median of the latest stored line from each sportsbook
+- **Close:** the last stored consensus frozen when the result is recorded
+
+The app also shows how many points the consensus moved, which team the market moved toward, how many books changed, and the total number of stored snapshots.
+
+**Important:** First Captured is not guaranteed to be the sportsbook's true opening line. The tool did not begin watching every game at the exact moment each sportsbook opened its market, so the UI labels this honestly instead of calling it a true opener.
+
+Line movement is calculated entirely from D1 data we already store. Viewing it costs no Odds API credits.
+
 ## Automatic updates
 
 Spread refresh checks run hourly, but D1 is checked first and the paid Odds API is only called when the market data is due for a refresh.

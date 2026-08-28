@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import worker from "../src/pwa-entry.js";
+import worker, { APP_VERSION as PUBLIC_APP_VERSION } from "../src/pwa-entry.js";
 import {
-  APP_VERSION,
+  APP_VERSION as PWA_BASE_VERSION,
   iconPng,
   manifestData,
   serviceWorkerScript,
@@ -36,9 +36,9 @@ test("PWA icons are real PNGs at the declared dimensions", () => {
   assert.deepEqual(pngSize(iconPng(180)), { width: 180, height: 180 });
 });
 
-test("service worker is versioned, avoids API caching, and uses network-first navigation", () => {
+test("base service worker stays network-first and avoids API caching", () => {
   const script = serviceWorkerScript();
-  assert.match(script, new RegExp(`VERSION = "${APP_VERSION.replaceAll(".", "\\.")}"`));
+  assert.match(script, new RegExp(`VERSION = "${PWA_BASE_VERSION.replaceAll(".", "\\.")}"`));
   assert.match(script, /request\.mode === "navigate"/);
   assert.match(script, /fetch\(request, \{ cache: "no-store" \}\)/);
   assert.match(script, /url\.pathname\.startsWith\("\/api\/"\)/);
@@ -54,11 +54,12 @@ test("PWA shell exposes manifest, apple icon, service worker, and app/API versio
   assert.match(page, /serviceWorker\.register/);
   assert.match(page, /App v/);
   assert.match(page, /API v/);
-  assert.match(page, new RegExp(APP_VERSION.replaceAll(".", "\\.")));
   assert.match(page, /\/api\/health/);
 });
 
-test("public worker serves PWA assets and reports the synchronized 0.7 app version", async () => {
+test("public worker serves PWA assets and reports the synchronized 0.8 app version", async () => {
+  assert.equal(PUBLIC_APP_VERSION, "0.8.0");
+
   const manifestResponse = await worker.fetch(new Request("https://example.com/manifest.webmanifest"), {});
   assert.equal(manifestResponse.status, 200);
   assert.match(manifestResponse.headers.get("content-type"), /application\/manifest\+json/);
@@ -68,6 +69,9 @@ test("public worker serves PWA assets and reports the synchronized 0.7 app versi
   assert.equal(swResponse.status, 200);
   assert.match(swResponse.headers.get("content-type"), /application\/javascript/);
   assert.equal(swResponse.headers.get("service-worker-allowed"), "/");
+  const sw = await swResponse.text();
+  assert.match(sw, /VERSION = "0\.8\.0"/);
+  assert.doesNotMatch(sw, /VERSION = "0\.7\.0"/);
 
   const iconResponse = await worker.fetch(new Request("https://example.com/icons/icon-192.png"), {});
   assert.equal(iconResponse.status, 200);
@@ -76,7 +80,7 @@ test("public worker serves PWA assets and reports the synchronized 0.7 app versi
 
   const healthResponse = await worker.fetch(new Request("https://example.com/api/health"), {});
   assert.equal(healthResponse.status, 200);
-  assert.equal((await healthResponse.json()).version, APP_VERSION);
+  assert.equal((await healthResponse.json()).version, PUBLIC_APP_VERSION);
 });
 
 test("Cloudflare deploys the PWA wrapper as the worker entrypoint", () => {
