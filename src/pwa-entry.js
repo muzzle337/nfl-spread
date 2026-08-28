@@ -3,7 +3,7 @@ import { lineMovementForGame } from "./line-movement.js";
 import { withLineMovementUi } from "./line-movement-ui.js";
 import { APP_VERSION as PWA_BASE_VERSION, iconPng, manifestData, serviceWorkerScript, withPwa } from "./pwa.js";
 
-export const APP_VERSION = "0.8.0";
+export const APP_VERSION = "0.8.1";
 
 function textResponse(body, contentType, headers = {}) {
   return new Response(body, {
@@ -40,6 +40,13 @@ function publicPwaVersion(value) {
   return String(value).split(PWA_BASE_VERSION).join(APP_VERSION);
 }
 
+export function stabilizePwaVersionObserver(value) {
+  return String(value).replace(
+    "new MutationObserver(mountVersion).observe(appRoot, { childList: true, subtree: true })",
+    "new MutationObserver(mountVersion).observe(appRoot, { childList: true, subtree: false })"
+  );
+}
+
 async function withPublicVersion(response) {
   const body = await response.json().catch(() => null);
   if (!body || typeof body !== "object") return response;
@@ -52,7 +59,7 @@ async function withPublicVersion(response) {
 async function withPwaShell(response) {
   if (!response.ok) return response;
   const body = await response.text();
-  const pwa = publicPwaVersion(withPwa(body));
+  const pwa = stabilizePwaVersionObserver(publicPwaVersion(withPwa(body)));
   return new Response(withLineMovementUi(pwa), {
     status: response.status,
     headers: response.headers
