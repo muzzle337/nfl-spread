@@ -1,3 +1,5 @@
+import { ensureMarketSchema } from "./market-schema.js";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function nflRegularSeasonStartUtc(year) {
@@ -48,6 +50,16 @@ export function spreadChanged(latestSpread, incomingSpread) {
   return previous !== incoming;
 }
 
+export function moneylineChanged(latest, awayMoneyline, homeMoneyline) {
+  if (!latest) return true;
+  const previousAway = Number(latest.away_moneyline);
+  const previousHome = Number(latest.home_moneyline);
+  const incomingAway = Number(awayMoneyline);
+  const incomingHome = Number(homeMoneyline);
+  if (![previousAway, previousHome, incomingAway, incomingHome].every(Number.isFinite)) return true;
+  return previousAway !== incomingAway || previousHome !== incomingHome;
+}
+
 async function latestSpreadForSource(db, gameId, source) {
   return db.prepare(`
     SELECT away_spread
@@ -58,13 +70,26 @@ async function latestSpreadForSource(db, gameId, source) {
   `).bind(gameId, source).first();
 }
 
+async function latestMoneylineForSource(db, gameId, source) {
+  return db.prepare(`
+    SELECT away_moneyline, home_moneyline
+    FROM moneyline_snapshots
+    WHERE game_id = ? AND source = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).bind(gameId, source).first();
+}
+
 export async function ingestWeeklySpreads(db, games, now = new Date()) {
   if (!db) throw new Error("Database is not bound");
+  await ensureMarketSchema(db);
 
   const selection = selectEarliestUpcomingWeek(games, now);
   let gamesUpserted = 0;
   let snapshotsInserted = 0;
   let snapshotsUnchanged = 0;
+  let moneylineSnapshotsInserted = 0;
+  let moneylineSnapshotsUnchanged = 0;
 
   for (const game of selection.games) {
     await db.prepare(`
@@ -90,22 +115,42 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
     gamesUpserted += 1;
 
     for (const book of game.books ?? []) {
-      const latest = await latestSpreadForSource(db, game.id, book.key);
-      if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
-        snapshotsUnchanged += 1;
-        continue;
+      if (Number.isFinite(Number(book.awaySpread))) {
+        const latest = await latestSpreadForSource(db, game.id, book.key);
+        if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
+          snapshotsUnchanged += 1;
+        } else {
+          await db.prepare(`
+            INSERT INTO line_snapshots(game_id, captured_at, away_spread, source)
+            VALUES (?, ?, ?, ?)
+          `).bind(
+            game.id,
+            book.lastUpdate ?? new Date().toISOString(),
+            book.awaySpread,
+            book.key
+          ).run();
+          snapshotsInserted += 1;
+        }
       }
 
-      await db.prepare(`
-        INSERT INTO line_snapshots(game_id, captured_at, away_spread, source)
-        VALUES (?, ?, ?, ?)
-      `).bind(
-        game.id,
-        book.lastUpdate ?? new Date().toISOString(),
-        book.awaySpread,
-        book.key
-      ).run();
-      snapshotsInserted += 1;
+      if (Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))) {
+        const latestMoneyline = await latestMoneylineForSource(db, game.id, book.key);
+        if (!moneylineChanged(latestMoneyline, book.awayMoneyline, book.homeMoneyline)) {
+          moneylineSnapshotsUnchanged += 1;
+        } else {
+          await db.prepare(`
+            INSERT INTO moneyline_snapshots(game_id, captured_at, away_moneyline, home_moneyline, source)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(
+            game.id,
+            book.lastUpdate ?? new Date().toISOString(),
+            book.awayMoneyline,
+            book.homeMoneyline,
+            book.key
+          ).run();
+          moneylineSnapshotsInserted += 1;
+        }
+      }
     }
   }
 
@@ -116,6 +161,8 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
     gamesSelected: selection.games.length,
     gamesUpserted,
     snapshotsInserted,
-    snapshotsUnchanged
+    snapshotsUnchanged,
+    moneylineSnapshotsInserted,
+    moneylineSnapshotsUnchanged
   };
 }
