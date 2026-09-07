@@ -60,10 +60,15 @@ export function moneylineChanged(latest, awayMoneyline, homeMoneyline) {
   return previousAway !== incomingAway || previousHome !== incomingHome;
 }
 
+export function hasMarketNumber(value) {
+  if (value === null || value === undefined || value === "") return false;
+  return Number.isFinite(Number(value));
+}
+
 function gamesContainMoneyline(games) {
   return (Array.isArray(games) ? games : []).some((game) =>
     (game.books ?? []).some((book) =>
-      Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))
+      hasMarketNumber(book.awayMoneyline) && hasMarketNumber(book.homeMoneyline)
     )
   );
 }
@@ -124,7 +129,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
     gamesUpserted += 1;
 
     for (const book of game.books ?? []) {
-      if (Number.isFinite(Number(book.awaySpread))) {
+      if (hasMarketNumber(book.awaySpread) && hasMarketNumber(book.homeSpread)) {
         const latest = await latestSpreadForSource(db, game.id, book.key);
         if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
           snapshotsUnchanged += 1;
@@ -142,7 +147,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
         }
       }
 
-      if (hasMoneyline && Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))) {
+      if (hasMoneyline && hasMarketNumber(book.awayMoneyline) && hasMarketNumber(book.homeMoneyline)) {
         const latestMoneyline = await latestMoneylineForSource(db, game.id, book.key);
         if (!moneylineChanged(latestMoneyline, book.awayMoneyline, book.homeMoneyline)) {
           moneylineSnapshotsUnchanged += 1;

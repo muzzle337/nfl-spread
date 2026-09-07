@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nflRegularSeasonStartUtc, nflWeekForCommenceTime, selectEarliestUpcomingWeek, spreadChanged } from "../src/ingestion.js";
+import { hasMarketNumber, nflRegularSeasonStartUtc, nflWeekForCommenceTime, selectEarliestUpcomingWeek, spreadChanged } from "../src/ingestion.js";
 
 test("2026 NFL regular season start resolves to Thursday after Labor Day", () => {
   assert.equal(nflRegularSeasonStartUtc(2026).toISOString(), "2026-09-10T00:00:00.000Z");
@@ -50,4 +50,13 @@ test("unchanged bookmaker spreads do not create a new snapshot", () => {
   assert.equal(spreadChanged(null, -3.5), true);
   assert.equal(spreadChanged(-3.5, -3.5), false);
   assert.equal(spreadChanged(-3.5, -4), true);
+});
+
+test("missing market values are not treated as numeric zero", () => {
+  assert.equal(hasMarketNumber(null), false);
+  assert.equal(hasMarketNumber(undefined), false);
+  assert.equal(hasMarketNumber(""), false);
+  assert.equal(hasMarketNumber(-225), true);
+  assert.equal(hasMarketNumber("+180"), true);
+  assert.equal(hasMarketNumber(0), true);
 });
