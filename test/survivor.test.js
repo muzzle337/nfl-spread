@@ -18,6 +18,12 @@ function fakeDb() {
             async all() {
               if (text.includes("FROM games") && text.includes("season = ? AND week = ?")) return { results: games };
               if (text.includes("FROM survivor_picks")) return { results: [{ team: "Buffalo Bills" }] };
+              if (text.includes("FROM line_snapshots")) {
+                return { results: [
+                  { source: "book1", away_spread: -6.5, captured_at: "2026-09-07T10:00:00Z" },
+                  { source: "book2", away_spread: -6.5, captured_at: "2026-09-07T10:00:00Z" }
+                ] };
+              }
               if (text.includes("FROM moneyline_snapshots")) {
                 return { results: [
                   { source: "book1", away_moneyline: -300, home_moneyline: 240, captured_at: "2026-09-07T10:00:00Z" },
@@ -36,10 +42,20 @@ function fakeDb() {
   };
 }
 
-test("Survivor removes a team already used by the selected entry", async () => {
+test("Survivor returns the full field and flags used teams", async () => {
   const result = await survivorRecommendations(fakeDb(), 2026, 2, 1);
   assert.deepEqual(result.usedTeams, ["Buffalo Bills"]);
-  assert.equal(result.candidates.some((candidate) => candidate.team === "Buffalo Bills"), false);
+  assert.equal(result.candidates.length, 2);
+
+  const buffalo = result.candidates.find((candidate) => candidate.team === "Buffalo Bills");
+  const miami = result.candidates.find((candidate) => candidate.team === "Miami Dolphins");
+
+  assert.equal(buffalo.used, true);
+  assert.equal(buffalo.available, false);
+  assert.equal(buffalo.spread, -6.5);
+  assert.equal(miami.used, false);
+  assert.equal(miami.available, true);
+  assert.equal(miami.spread, 6.5);
   assert.equal(result.safestPick.team, "Miami Dolphins");
   assert.equal(result.strategyVersion, "safety_first_v1");
 });
