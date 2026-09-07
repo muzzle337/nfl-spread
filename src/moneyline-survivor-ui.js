@@ -1,0 +1,51 @@
+export function withMoneylineSurvivorUi(html) {
+  if (typeof html !== "string") return html;
+  const extension = `
+<style>
+  .ml-strip{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.055);color:#c9d5df;font-size:10px;font-weight:800}
+  .ml-strip strong{color:#f4f7fb}
+  .survivor-nav{color:#718091}
+  .survivor-overlay{position:fixed;inset:0;z-index:80;background:#080b10;color:#f4f7fb;overflow:auto;padding-bottom:92px;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+  .survivor-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;padding:calc(14px + env(safe-area-inset-top)) 14px 13px;background:rgba(8,11,16,.96);border-bottom:1px solid rgba(255,255,255,.07)}
+  .survivor-back{border:0;background:transparent;color:#dbe6ef;font-size:28px;width:36px;height:36px}
+  .survivor-title{font-size:14px;font-weight:900}.survivor-sub{font-size:10px;color:#8c9aaa;margin-top:2px}
+  .survivor-body{max-width:560px;margin:0 auto;padding:14px}
+  .survivor-card{border:1px solid #233041;background:#0e141c;border-radius:15px;padding:13px;margin-bottom:9px}
+  .survivor-rank{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center}
+  .survivor-num{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(76,166,255,.12);color:#4ca6ff;font-weight:950}
+  .survivor-team{font-size:13px;font-weight:900}.survivor-meta{font-size:10px;color:#8c9aaa;margin-top:3px}.survivor-ml{font-size:13px;font-weight:900;color:#72dc66;text-align:right}
+  .survivor-entry-row{display:flex;gap:7px;overflow:auto;margin-bottom:12px}.survivor-entry{white-space:nowrap;border:1px solid #233041;background:#0e141c;color:#8c9aaa;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:850}.survivor-entry.active{background:#4ca6ff;color:#06111b;border-color:#4ca6ff}
+  .survivor-add{display:flex;gap:7px;margin-bottom:14px}.survivor-add input{flex:1;min-width:0;border:1px solid #233041;background:#090e14;color:#f4f7fb;border-radius:11px;padding:10px}.survivor-add button,.survivor-pick{border:1px solid #233041;background:#121a24;color:#f4f7fb;border-radius:10px;padding:9px 10px;font-size:10px;font-weight:850}
+  .survivor-note{color:#8c9aaa;font-size:10px;line-height:1.45;margin:8px 2px 14px}.survivor-empty{border:1px dashed #233041;border-radius:15px;padding:24px;text-align:center;color:#8c9aaa;font-size:11px}
+</style>
+<script>
+(function(){
+  var cache=null, entries=[], selectedEntry=null, overlay=null;
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
+  function teamCode(name){var map={'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF','Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE','Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB','Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC','Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LAR','Miami Dolphins':'MIA','Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG','New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF','Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS'};return map[name]||name}
+  function ml(v){var n=Number(v);if(!Number.isFinite(n))return '—';return n>0?'+'+n:String(n)}
+  function moneylineText(game){var m=game&&game.moneyline;if(!m||!m.moneylineBookmakerCount)return 'ML unavailable';return '<strong>ML</strong> · '+esc(teamCode(game.awayTeam))+' '+esc(ml(m.consensusAwayMoneyline))+' · '+esc(teamCode(game.homeTeam))+' '+esc(ml(m.consensusHomeMoneyline))}
+  async function loadBoard(){try{var r=await fetch('/api/dashboard/nfl',{cache:'no-store',headers:{accept:'application/json'}});if(r.ok)cache=await r.json()}catch(_){}}
+  function decorateCards(){if(!cache||!cache.games)return;document.querySelectorAll('.game-card[data-game]').forEach(function(card){if(card.querySelector('.ml-strip'))return;var id=card.getAttribute('data-game'),g=cache.games.find(function(x){return x.id===id});if(!g)return;card.insertAdjacentHTML('beforeend','<div class="ml-strip">'+moneylineText(g)+'</div>')})}
+  function addNav(){document.querySelectorAll('.bottom-nav').forEach(function(nav){if(nav.querySelector('[data-survivor-nav]'))return;nav.style.gridTemplateColumns='repeat(5,1fr)';nav.insertAdjacentHTML('beforeend','<button class="nav-btn survivor-nav" data-survivor-nav="1"><span class="nav-icon">♜</span><span class="nav-label">Survivor</span></button>')})}
+  async function api(path,options){var r=await fetch(path,options||{headers:{accept:'application/json'},cache:'no-store'}),b=await r.json().catch(function(){return {error:'Invalid response'}});if(!r.ok)throw new Error(b.message||b.error||'Request failed');return b}
+  async function loadEntries(){if(!cache)await loadBoard();if(!cache||!cache.season)return;var b=await api('/api/survivor/entries?season='+encodeURIComponent(cache.season));entries=b.entries||[];if(selectedEntry&&!entries.some(function(e){return e.id===selectedEntry}))selectedEntry=null}
+  async function survivorData(){if(!cache)await loadBoard();var q='?season='+encodeURIComponent(cache.season)+'&week='+encodeURIComponent(cache.week);if(selectedEntry)q+='&entry='+encodeURIComponent(selectedEntry);return api('/api/survivor'+q)}
+  function entryButtons(){var all='<button class="survivor-entry '+(!selectedEntry?'active':'')+'" data-entry="">All teams</button>';return all+entries.map(function(e){return '<button class="survivor-entry '+(selectedEntry===e.id?'active':'')+'" data-entry="'+esc(e.id)+'">'+esc(e.name)+'</button>'}).join('')}
+  async function renderSurvivor(){if(!overlay)return;overlay.innerHTML='<div class="survivor-head"><button class="survivor-back" data-survivor-close>‹</button><div><div class="survivor-title">SURVIVOR</div><div class="survivor-sub">Loading current week…</div></div></div><div class="survivor-body"><div class="survivor-empty">Loading recommendations…</div></div>';
+    try{await loadEntries();var d=await survivorData();var body='<div class="survivor-head"><button class="survivor-back" data-survivor-close>‹</button><div><div class="survivor-title">SURVIVOR · WEEK '+esc(d.week)+'</div><div class="survivor-sub">Safety-first ranking from current consensus moneylines</div></div></div><div class="survivor-body">'+
+      '<div class="survivor-entry-row">'+entryButtons()+'</div><div class="survivor-add"><input data-entry-name placeholder="New entry name"><button data-add-entry>Add Entry</button></div>'+
+      '<div class="survivor-note">Used teams are removed when an entry is selected. Future-week value and multi-entry diversification come in the next intelligence phase.</div>'+
+      (d.candidates&&d.candidates.length?d.candidates.slice(0,10).map(function(c,i){return '<div class="survivor-card"><div class="survivor-rank"><div class="survivor-num">'+(i+1)+'</div><div><div class="survivor-team">'+esc(teamCode(c.team))+' vs '+esc(teamCode(c.opponent))+'</div><div class="survivor-meta">'+esc(c.side)+' · '+esc(c.winProbability)+'% market win · '+esc(c.bookmakerCount)+' books</div></div><div><div class="survivor-ml">'+esc(ml(c.moneyline))+'</div>'+(selectedEntry?'<button class="survivor-pick" data-pick-team="'+esc(c.team)+'" data-pick-game="'+esc(c.gameId)+'">Use</button>':'')+'</div></div></div>'}).join(''):'<div class="survivor-empty">No moneyline candidates are stored yet. Run Update Lines from Tools.</div>')+'</div>';
+      overlay.innerHTML=body;bindOverlay()}catch(e){overlay.innerHTML='<div class="survivor-head"><button class="survivor-back" data-survivor-close>‹</button><div><div class="survivor-title">SURVIVOR</div></div></div><div class="survivor-body"><div class="survivor-empty">'+esc(e.message)+'</div></div>';bindOverlay()}}
+  function adminHeaders(){var token=sessionStorage.getItem('nflSpreadAdminToken')||'';return token?{'content-type':'application/json','x-admin-token':token}:{'content-type':'application/json'}}
+  function bindOverlay(){if(!overlay)return;overlay.querySelectorAll('[data-survivor-close]').forEach(function(b){b.onclick=closeSurvivor});overlay.querySelectorAll('[data-entry]').forEach(function(b){b.onclick=function(){var v=b.getAttribute('data-entry');selectedEntry=v?Number(v):null;renderSurvivor()}});var add=overlay.querySelector('[data-add-entry]');if(add)add.onclick=async function(){var input=overlay.querySelector('[data-entry-name]'),name=input&&input.value.trim();if(!name)return;try{await api('/api/survivor/entries',{method:'POST',headers:adminHeaders(),body:JSON.stringify({season:cache.season,name:name})});await renderSurvivor()}catch(e){alert(e.message+' — enter the Admin Key in Tools first.')}};overlay.querySelectorAll('[data-pick-team]').forEach(function(b){b.onclick=async function(){try{await api('/api/survivor/picks',{method:'POST',headers:adminHeaders(),body:JSON.stringify({entryId:selectedEntry,season:cache.season,week:cache.week,team:b.getAttribute('data-pick-team'),gameId:b.getAttribute('data-pick-game')})});await renderSurvivor()}catch(e){alert(e.message+' — enter the Admin Key in Tools first.')}}})}
+  function openSurvivor(){if(overlay)return;overlay=document.createElement('div');overlay.className='survivor-overlay';document.body.appendChild(overlay);renderSurvivor()}
+  function closeSurvivor(){if(overlay){overlay.remove();overlay=null}}
+  document.addEventListener('click',function(e){var b=e.target&&e.target.closest&&e.target.closest('[data-survivor-nav]');if(b){e.preventDefault();openSurvivor()}});
+  var root=document.getElementById('app');if(root)new MutationObserver(function(){addNav();decorateCards()}).observe(root,{childList:true,subtree:true});
+  loadBoard().then(function(){addNav();decorateCards()});
+})();
+</script>`;
+  return html.replace("</body>", `${extension}\n</body>`);
+}

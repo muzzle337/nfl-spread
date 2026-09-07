@@ -1,5 +1,5 @@
 import { ingestWeeklySpreads } from "./ingestion.js";
-import { fetchNflSpreads } from "./odds.js";
+import { fetchNflMarkets } from "./odds.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 const NEXT_WEEK_DISCOVERY_WINDOW_HOURS = 8 * 24;
@@ -56,7 +56,7 @@ async function lastSuccessfulSpreadIngestion(db) {
     FROM api_usage
     WHERE provider = 'the-odds-api'
       AND success = 1
-      AND request_type IN ('nfl_ingest', 'nfl_auto_spreads')
+      AND request_type IN ('nfl_ingest', 'nfl_auto_spreads', 'nfl_markets', 'nfl_auto_markets')
     ORDER BY id DESC
     LIMIT 1
   `).first();
@@ -198,7 +198,7 @@ export async function syncSpreadsIfDue({
   db,
   apiKey,
   now = new Date(),
-  fetchSpreads = fetchNflSpreads
+  fetchSpreads = fetchNflMarkets
 }) {
   if (!db) throw new Error("Database is not bound");
   const nowDate = asDate(now);

@@ -1,5 +1,6 @@
 import { consensusForGame, consensusLinesForWeek } from "./consensus.js";
 import { classifyGame, settleAgainstSpread } from "./engine.js";
+import { moneylineForGame } from "./moneyline.js";
 
 const DEFAULT_THRESHOLDS = Object.freeze({
   focusMin: 55,
@@ -268,6 +269,21 @@ async function projectionThresholds(db) {
   return thresholds;
 }
 
+async function safeMoneylineForGame(db, game) {
+  try {
+    return await moneylineForGame(db, game);
+  } catch {
+    return {
+      moneylineBookmakerCount: 0,
+      consensusAwayMoneyline: null,
+      consensusHomeMoneyline: null,
+      awayWinProbability: null,
+      homeWinProbability: null,
+      books: []
+    };
+  }
+}
+
 export async function projectionsForWeek(db, season, week) {
   if (!db) throw new Error("Database is not bound");
   const seasonNumber = Number(season);
@@ -283,7 +299,11 @@ export async function projectionsForWeek(db, season, week) {
   ]);
 
   const stats = buildCurrentSeasonStats(history.settled);
-  const games = consensus.games.map((game) => projectConsensusGame(game, stats, thresholds));
+  const games = await Promise.all(consensus.games.map(async (game) => {
+    const projected = projectConsensusGame(game, stats, thresholds);
+    const moneyline = await safeMoneylineForGame(db, game);
+    return { ...projected, moneyline };
+  }));
 
   return {
     season: seasonNumber,
