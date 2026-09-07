@@ -1,7 +1,13 @@
 import baseApp from "./pwa-entry.js";
-import { isAdminAuthorized } from "./admin.js";
+import {
+  adminSessionCookie,
+  clearAdminSessionCookie,
+  createAdminSession,
+  isAdminSessionAuthorized
+} from "./admin-session.js";
 import { resolveDashboardWeek } from "./dashboard-data.js";
 import { ingestWeeklySpreads } from "./ingestion.js";
+import { withAdminPinUi } from "./admin-pin-ui.js";
 import { withMoneylineSurvivorUi } from "./moneyline-survivor-ui.js";
 import { fetchNflMarkets } from "./odds.js";
 import {
@@ -11,23 +17,55 @@ import {
   survivorRecommendations
 } from "./survivor.js";
 
-const APP_VERSION = "0.10.0";
+const APP_VERSION = "0.10.2";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,POST,OPTIONS",
+  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
   "access-control-allow-headers": "content-type,x-admin-token"
 };
 
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      ...corsHeaders
+      ...corsHeaders,
+      ...extraHeaders
     }
   });
+}
+
+async function adminSessionRoute(request, env, url) {
+  if (url.pathname !== "/api/admin/session") return null;
+
+  if (request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const result = await createAdminSession(body.pin, env);
+    if (!result.ok) return json({ error: result.error }, result.status);
+    return json({ ok: true, authenticated: true, expiresInSeconds: result.expiresInSeconds }, 200, {
+      "set-cookie": adminSessionCookie(result.token)
+    });
+  }
+
+  if (request.method === "GET") {
+    const auth = await isAdminSessionAuthorized(request, env);
+    return json({
+      ok: true,
+      configured: Boolean(env.ADMIN_UI_PIN && env.INGEST_ADMIN_TOKEN),
+      authenticated: auth.ok,
+      expiresAt: auth.ok ? auth.expiresAt ?? null : null
+    });
+  }
+
+  if (request.method === "DELETE") {
+    return json({ ok: true, authenticated: false }, 200, {
+      "set-cookie": clearAdminSessionCookie()
+    });
+  }
+
+  return json({ error: "Method not allowed" }, 405);
 }
 
 async function logApiUsage(env, { requestType, quota, triggerType = "manual", success = true }) {
@@ -84,7 +122,7 @@ async function survivorRoute(request, env, url) {
   }
 
   if (url.pathname === "/api/survivor/entries" && request.method === "POST") {
-    const auth = isAdminAuthorized(request, env);
+    const auth = await isAdminSessionAuthorized(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
     const body = await request.json().catch(() => ({}));
     try {
@@ -95,7 +133,7 @@ async function survivorRoute(request, env, url) {
   }
 
   if (url.pathname === "/api/survivor/picks" && request.method === "POST") {
-    const auth = isAdminAuthorized(request, env);
+    const auth = await isAdminSessionAuthorized(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
     const body = await request.json().catch(() => ({}));
     try {
@@ -122,7 +160,7 @@ async function marketRoute(request, env, url) {
   }
 
   if (url.pathname === "/api/ingest/nfl" && request.method === "POST") {
-    const auth = isAdminAuthorized(request, env);
+    const auth = await isAdminSessionAuthorized(request, env);
     if (!auth.ok) return json({ error: auth.error }, auth.status);
     if (!env.ODDS_API_KEY) return json({ error: "Odds API is not configured" }, 503);
     if (!env.DB) return json({ error: "Database is not bound" }, 503);
@@ -140,8 +178,20 @@ async function marketRoute(request, env, url) {
   return null;
 }
 
+async function proxyBaseAdminAction(request, env, ctx, url) {
+  if (!(request.method === "POST" && url.pathname === "/api/ingest/nfl/results")) return null;
+  const auth = await isAdminSessionAuthorized(request, env);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+  if (auth.method === "admin-token") return baseApp.fetch(request, env, ctx);
+
+  const headers = new Headers(request.headers);
+  headers.set("x-admin-token", env.INGEST_ADMIN_TOKEN);
+  const forwarded = new Request(request, { headers });
+  return baseApp.fetch(forwarded, env, ctx);
+}
+
 function replacePublicVersion(value) {
-  return String(value).split("0.9.0").join(APP_VERSION);
+  return String(value).split("0.9.0").join(APP_VERSION).split("0.10.0").join(APP_VERSION);
 }
 
 async function upgradeResponse(request, response) {
@@ -149,13 +199,13 @@ async function upgradeResponse(request, response) {
   if (url.pathname === "/api/health") {
     const body = await response.json().catch(() => null);
     if (!body || typeof body !== "object") return response;
-    return json({ ...body, version: APP_VERSION, moneyline: true, survivor: true });
+    return json({ ...body, version: APP_VERSION, moneyline: true, survivor: true, adminPinSession: true });
   }
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) {
     if (!response.ok) return response;
     const body = replacePublicVersion(await response.text());
-    return new Response(withMoneylineSurvivorUi(body), { status: response.status, headers: response.headers });
+    return new Response(withAdminPinUi(withMoneylineSurvivorUi(body)), { status: response.status, headers: response.headers });
   }
 
   if (request.method === "GET" && url.pathname === "/sw.js") {
@@ -171,11 +221,17 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     const url = new URL(request.url);
 
+    const session = await adminSessionRoute(request, env, url);
+    if (session) return session;
+
     const survivor = await survivorRoute(request, env, url);
     if (survivor) return survivor;
 
     const market = await marketRoute(request, env, url);
     if (market) return market;
+
+    const proxied = await proxyBaseAdminAction(request, env, ctx, url);
+    if (proxied) return proxied;
 
     const response = await baseApp.fetch(request, env, ctx);
     return upgradeResponse(request, response);
