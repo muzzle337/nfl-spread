@@ -1,3 +1,4 @@
+import { consensusMoneylineForGame } from "./moneyline.js";
 import { ensureMarketSchema } from "./market-schema.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +74,13 @@ function gamesContainMoneyline(games) {
   );
 }
 
+function median(values) {
+  const numbers = (values ?? []).filter(hasMarketNumber).map(Number).sort((a, b) => a - b);
+  if (!numbers.length) return null;
+  const middle = Math.floor(numbers.length / 2);
+  return numbers.length % 2 ? numbers[middle] : (numbers[middle - 1] + numbers[middle]) / 2;
+}
+
 async function latestSpreadForSource(db, gameId, source) {
   return db.prepare(`
     SELECT away_spread
@@ -91,6 +99,64 @@ async function latestMoneylineForSource(db, gameId, source) {
     ORDER BY id DESC
     LIMIT 1
   `).bind(gameId, source).first();
+}
+
+export async function storeFutureSurvivorMarkets(db, games, selection, now = new Date()) {
+  if (!selection?.season || !selection?.week) return 0;
+  await ensureMarketSchema(db);
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  let stored = 0;
+
+  for (const game of Array.isArray(games) ? games : []) {
+    const meta = nflWeekForCommenceTime(game.commenceTime);
+    const kickoffMs = new Date(game.commenceTime).getTime();
+    if (!meta || !Number.isFinite(kickoffMs) || kickoffMs < nowMs) continue;
+    if (meta.season !== selection.season || meta.week <= selection.week || meta.week > selection.week + 5) continue;
+
+    const completeMlBooks = (game.books ?? []).filter((book) => hasMarketNumber(book.awayMoneyline) && hasMarketNumber(book.homeMoneyline));
+    if (!completeMlBooks.length) continue;
+    const ml = consensusMoneylineForGame({ id: game.id }, completeMlBooks);
+    const awaySpread = median((game.books ?? []).map((book) => book.awaySpread));
+    const homeSpread = median((game.books ?? []).map((book) => book.homeSpread));
+
+    await db.prepare(`
+      INSERT INTO survivor_future_markets(
+        season, week, game_id, away_team, home_team, kickoff_at,
+        away_moneyline, home_moneyline, away_win_probability, home_win_probability,
+        away_spread, home_spread, bookmaker_count, captured_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(season, week, game_id) DO UPDATE SET
+        away_team = excluded.away_team,
+        home_team = excluded.home_team,
+        kickoff_at = excluded.kickoff_at,
+        away_moneyline = excluded.away_moneyline,
+        home_moneyline = excluded.home_moneyline,
+        away_win_probability = excluded.away_win_probability,
+        home_win_probability = excluded.home_win_probability,
+        away_spread = excluded.away_spread,
+        home_spread = excluded.home_spread,
+        bookmaker_count = excluded.bookmaker_count,
+        captured_at = excluded.captured_at
+    `).bind(
+      meta.season,
+      meta.week,
+      game.id,
+      game.awayTeam,
+      game.homeTeam,
+      game.commenceTime,
+      ml.consensusAwayMoneyline,
+      ml.consensusHomeMoneyline,
+      ml.awayWinProbability,
+      ml.homeWinProbability,
+      awaySpread,
+      homeSpread,
+      ml.moneylineBookmakerCount,
+      new Date().toISOString()
+    ).run();
+    stored += 1;
+  }
+
+  return stored;
 }
 
 export async function ingestWeeklySpreads(db, games, now = new Date()) {
@@ -137,12 +203,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
           await db.prepare(`
             INSERT INTO line_snapshots(game_id, captured_at, away_spread, source)
             VALUES (?, ?, ?, ?)
-          `).bind(
-            game.id,
-            book.lastUpdate ?? new Date().toISOString(),
-            book.awaySpread,
-            book.key
-          ).run();
+          `).bind(game.id, book.lastUpdate ?? new Date().toISOString(), book.awaySpread, book.key).run();
           snapshotsInserted += 1;
         }
       }
@@ -155,18 +216,16 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
           await db.prepare(`
             INSERT INTO moneyline_snapshots(game_id, captured_at, away_moneyline, home_moneyline, source)
             VALUES (?, ?, ?, ?, ?)
-          `).bind(
-            game.id,
-            book.lastUpdate ?? new Date().toISOString(),
-            book.awayMoneyline,
-            book.homeMoneyline,
-            book.key
-          ).run();
+          `).bind(game.id, book.lastUpdate ?? new Date().toISOString(), book.awayMoneyline, book.homeMoneyline, book.key).run();
           moneylineSnapshotsInserted += 1;
         }
       }
     }
   }
+
+  const futureSurvivorMarketsStored = hasMoneyline
+    ? await storeFutureSurvivorMarkets(db, games, selection, now)
+    : 0;
 
   return {
     season: selection.season,
@@ -177,6 +236,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
     snapshotsInserted,
     snapshotsUnchanged,
     moneylineSnapshotsInserted,
-    moneylineSnapshotsUnchanged
+    moneylineSnapshotsUnchanged,
+    futureSurvivorMarketsStored
   };
 }

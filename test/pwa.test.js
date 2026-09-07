@@ -81,7 +81,7 @@ test("hardened service worker reports its public version", () => {
 test("recover route clears only this origin cache and storage then returns to current app", async () => {
   const response = await worker.fetch(new Request("https://example.com/recover?reason=test"), {});
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get("clear-site-data"), '"cache", "storage"');
+  assert.equal(response.headers.get("clear-site-data"), '\"cache\", \"storage\"');
   assert.match(response.headers.get("cache-control"), /no-store/);
   const location = new URL(response.headers.get("location"));
   assert.equal(location.pathname, "/");
@@ -112,7 +112,7 @@ test("public worker serves PWA assets and reports synchronized 0.9.0 version", a
   assert.equal((await healthResponse.json()).version, PUBLIC_APP_VERSION);
 });
 
-test("Cloudflare deploys the v0.11 wrapper as the worker entrypoint", () => {
+test("Cloudflare deploys the v0.12 wrapper as the worker entrypoint", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\s*:\s*"src\/v011-entry\.js"/);
+  assert.match(config, /"main"\s*:\s*"src\/v012-entry\.js"/);
 });
