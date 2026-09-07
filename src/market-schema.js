@@ -34,7 +34,26 @@ export async function ensureMarketSchema(db) {
       FOREIGN KEY(entry_id) REFERENCES survivor_entries(id) ON DELETE CASCADE,
       FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE SET NULL
     )`,
-    `CREATE INDEX IF NOT EXISTS idx_survivor_picks_entry_season ON survivor_picks(entry_id, season, week)`
+    `CREATE INDEX IF NOT EXISTS idx_survivor_picks_entry_season ON survivor_picks(entry_id, season, week)`,
+    `CREATE TABLE IF NOT EXISTS survivor_future_markets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season INTEGER NOT NULL,
+      week INTEGER NOT NULL,
+      game_id TEXT NOT NULL,
+      away_team TEXT NOT NULL,
+      home_team TEXT NOT NULL,
+      kickoff_at TEXT NOT NULL,
+      away_moneyline INTEGER,
+      home_moneyline INTEGER,
+      away_win_probability REAL,
+      home_win_probability REAL,
+      away_spread REAL,
+      home_spread REAL,
+      bookmaker_count INTEGER NOT NULL DEFAULT 0,
+      captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(season, week, game_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_survivor_future_season_week ON survivor_future_markets(season, week, kickoff_at)`
   ];
 
   for (const statement of statements) {
