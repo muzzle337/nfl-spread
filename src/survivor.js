@@ -1,3 +1,4 @@
+import { consensusLinesForWeek } from "./consensus.js";
 import { ensureMarketSchema } from "./market-schema.js";
 import { moneylineForGame } from "./moneyline.js";
 
@@ -40,18 +41,37 @@ export async function survivorRecommendations(db, season, week, entryId = null) 
   }
   if (entryNumber !== null && !Number.isInteger(entryNumber)) throw new Error("entry must be an integer");
 
-  const [games, usedTeams] = await Promise.all([
+  const [games, usedTeams, spreadConsensus] = await Promise.all([
     storedGamesForWeek(db, seasonNumber, weekNumber),
-    usedTeamsForEntry(db, entryNumber, seasonNumber)
+    usedTeamsForEntry(db, entryNumber, seasonNumber),
+    consensusLinesForWeek(db, seasonNumber, weekNumber)
   ]);
   const used = new Set(usedTeams);
+  const spreadByGame = new Map((spreadConsensus.games ?? []).map((game) => [game.id, game]));
   const candidates = [];
 
   for (const game of games) {
     const market = await moneylineForGame(db, game);
+    const spread = spreadByGame.get(game.id);
+    const awaySpread = finiteNumber(spread?.medianAwaySpread);
+    const homeSpread = finiteNumber(spread?.medianHomeSpread);
     const sides = [
-      { side: "AWAY", team: game.away_team, opponent: game.home_team, moneyline: market.consensusAwayMoneyline, winProbability: market.awayWinProbability },
-      { side: "HOME", team: game.home_team, opponent: game.away_team, moneyline: market.consensusHomeMoneyline, winProbability: market.homeWinProbability }
+      {
+        side: "AWAY",
+        team: game.away_team,
+        opponent: game.home_team,
+        moneyline: market.consensusAwayMoneyline,
+        winProbability: market.awayWinProbability,
+        spread: awaySpread
+      },
+      {
+        side: "HOME",
+        team: game.home_team,
+        opponent: game.away_team,
+        moneyline: market.consensusHomeMoneyline,
+        winProbability: market.homeWinProbability,
+        spread: homeSpread
+      }
     ];
 
     for (const side of sides) {
@@ -64,6 +84,7 @@ export async function survivorRecommendations(db, season, week, entryId = null) 
         team: side.team,
         opponent: side.opponent,
         moneyline: finiteNumber(side.moneyline),
+        spread: finiteNumber(side.spread),
         winProbability: probability,
         used: used.has(side.team),
         available: !used.has(side.team),
@@ -72,9 +93,12 @@ export async function survivorRecommendations(db, season, week, entryId = null) 
     }
   }
 
-  const available = candidates
-    .filter((candidate) => candidate.available)
-    .sort((a, b) => b.winProbability - a.winProbability || (a.moneyline ?? 99999) - (b.moneyline ?? 99999));
+  const ranked = candidates.sort((a, b) =>
+    b.winProbability - a.winProbability ||
+    (a.moneyline ?? 99999) - (b.moneyline ?? 99999) ||
+    a.team.localeCompare(b.team)
+  );
+  const available = ranked.filter((candidate) => candidate.available);
 
   return {
     season: seasonNumber,
@@ -85,7 +109,7 @@ export async function survivorRecommendations(db, season, week, entryId = null) 
     strategyVersion: "safety_first_v1",
     note: "Future-week value and portfolio diversification are not yet included in this first Survivor foundation.",
     safestPick: available[0] ?? null,
-    candidates: available
+    candidates: ranked
   };
 }
 
