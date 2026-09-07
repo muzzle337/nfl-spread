@@ -1,4 +1,5 @@
 import app, { ensureDefaultSurvivorEntries } from "./v011-entry.js";
+import { ensureMarketSchema } from "./market-schema.js";
 import { survivorAnalytics } from "./survivor-analytics.js";
 import { withSurvivorV012Ui } from "./survivor-v012-ui.js";
 
@@ -22,9 +23,10 @@ async function analyticsRoute(request, env, url) {
   const week = Number(url.searchParams.get("week"));
   if (!Number.isInteger(season) || !Number.isInteger(week)) return json({ error: "season and week are required" }, 400);
 
-  const bootstrap = new Request(`${url.origin}/api/survivor/entries?season=${encodeURIComponent(season)}`, { method: "GET" });
-  await ensureDefaultSurvivorEntries(bootstrap, env);
   try {
+    await ensureMarketSchema(env.DB);
+    const bootstrap = new Request(`${url.origin}/api/survivor/entries?season=${encodeURIComponent(season)}`, { method: "GET" });
+    await ensureDefaultSurvivorEntries(bootstrap, env);
     return json({ ok: true, ...(await survivorAnalytics(env.DB, season, week)) });
   } catch (error) {
     return json({ error: "Survivor analytics unavailable", message: error.message }, 400);
