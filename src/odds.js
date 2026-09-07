@@ -16,15 +16,23 @@ export function quotaFromHeaders(headers) {
   };
 }
 
-export function buildNflSpreadsUrl(apiKey) {
+function buildNflOddsUrl(apiKey, markets) {
   if (!apiKey) throw new Error("ODDS_API_KEY is not configured");
   const url = new URL(`${ODDS_API_BASE}/sports/${NFL_SPORT_KEY}/odds`);
   url.searchParams.set("apiKey", apiKey);
   url.searchParams.set("regions", "us");
-  url.searchParams.set("markets", "spreads");
+  url.searchParams.set("markets", markets.join(","));
   url.searchParams.set("oddsFormat", "american");
   url.searchParams.set("dateFormat", "iso");
   return url;
+}
+
+export function buildNflSpreadsUrl(apiKey) {
+  return buildNflOddsUrl(apiKey, ["spreads"]);
+}
+
+export function buildNflMarketsUrl(apiKey) {
+  return buildNflOddsUrl(apiKey, ["spreads", "h2h"]);
 }
 
 export function buildNflScoresUrl(apiKey, daysFrom = 3) {
@@ -41,28 +49,43 @@ export function buildNflScoresUrl(apiKey, daysFrom = 3) {
   return url;
 }
 
-export function normalizeNflSpreads(events) {
+function normalizedBookmaker(event, bookmaker) {
+  const markets = bookmaker.markets ?? [];
+  const spreadMarket = markets.find((item) => item.key === "spreads");
+  const moneylineMarket = markets.find((item) => item.key === "h2h");
+
+  const spreadAway = (spreadMarket?.outcomes ?? []).find((outcome) => outcome.name === event.away_team);
+  const spreadHome = (spreadMarket?.outcomes ?? []).find((outcome) => outcome.name === event.home_team);
+  const awaySpread = Number(spreadAway?.point);
+  const homeSpread = Number(spreadHome?.point);
+
+  const moneylineAway = (moneylineMarket?.outcomes ?? []).find((outcome) => outcome.name === event.away_team);
+  const moneylineHome = (moneylineMarket?.outcomes ?? []).find((outcome) => outcome.name === event.home_team);
+  const awayMoneyline = Number(moneylineAway?.price);
+  const homeMoneyline = Number(moneylineHome?.price);
+
+  const hasSpread = Number.isFinite(awaySpread) && Number.isFinite(homeSpread);
+  const hasMoneyline = Number.isFinite(awayMoneyline) && Number.isFinite(homeMoneyline);
+  if (!hasSpread && !hasMoneyline) return null;
+
+  return {
+    key: bookmaker.key,
+    title: bookmaker.title,
+    lastUpdate: moneylineMarket?.last_update ?? spreadMarket?.last_update ?? bookmaker.last_update ?? null,
+    awaySpread: hasSpread ? awaySpread : null,
+    homeSpread: hasSpread ? homeSpread : null,
+    awayMoneyline: hasMoneyline ? awayMoneyline : null,
+    homeMoneyline: hasMoneyline ? homeMoneyline : null
+  };
+}
+
+export function normalizeNflMarkets(events) {
   if (!Array.isArray(events)) return [];
 
   return events.map((event) => {
-    const books = (event.bookmakers ?? []).flatMap((bookmaker) => {
-      const market = (bookmaker.markets ?? []).find((item) => item.key === "spreads");
-      if (!market) return [];
-
-      const away = (market.outcomes ?? []).find((outcome) => outcome.name === event.away_team);
-      const home = (market.outcomes ?? []).find((outcome) => outcome.name === event.home_team);
-      const awaySpread = Number(away?.point);
-      const homeSpread = Number(home?.point);
-      if (!Number.isFinite(awaySpread) || !Number.isFinite(homeSpread)) return [];
-
-      return [{
-        key: bookmaker.key,
-        title: bookmaker.title,
-        lastUpdate: market.last_update ?? bookmaker.last_update ?? null,
-        awaySpread,
-        homeSpread
-      }];
-    });
+    const books = (event.bookmakers ?? [])
+      .map((bookmaker) => normalizedBookmaker(event, bookmaker))
+      .filter(Boolean);
 
     return {
       id: event.id,
@@ -74,6 +97,19 @@ export function normalizeNflSpreads(events) {
       books
     };
   });
+}
+
+export function normalizeNflSpreads(events) {
+  return normalizeNflMarkets(events).map((game) => ({
+    ...game,
+    books: game.books.filter((book) => Number.isFinite(book.awaySpread) && Number.isFinite(book.homeSpread)).map((book) => ({
+      key: book.key,
+      title: book.title,
+      lastUpdate: book.lastUpdate,
+      awaySpread: book.awaySpread,
+      homeSpread: book.homeSpread
+    }))
+  })).map((game) => ({ ...game, bookmakerCount: game.books.length }));
 }
 
 export function normalizeNflScores(events) {
@@ -126,6 +162,16 @@ export async function fetchNflSpreads({ apiKey, fetchImpl = fetch }) {
 
   return {
     games: normalizeNflSpreads(payload),
+    quota
+  };
+}
+
+export async function fetchNflMarkets({ apiKey, fetchImpl = fetch }) {
+  const url = buildNflMarketsUrl(apiKey);
+  const { payload, quota } = await fetchOddsApiJson(url, fetchImpl);
+
+  return {
+    games: normalizeNflMarkets(payload),
     quota
   };
 }
