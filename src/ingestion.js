@@ -60,6 +60,14 @@ export function moneylineChanged(latest, awayMoneyline, homeMoneyline) {
   return previousAway !== incomingAway || previousHome !== incomingHome;
 }
 
+function gamesContainMoneyline(games) {
+  return (Array.isArray(games) ? games : []).some((game) =>
+    (game.books ?? []).some((book) =>
+      Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))
+    )
+  );
+}
+
 async function latestSpreadForSource(db, gameId, source) {
   return db.prepare(`
     SELECT away_spread
@@ -82,7 +90,8 @@ async function latestMoneylineForSource(db, gameId, source) {
 
 export async function ingestWeeklySpreads(db, games, now = new Date()) {
   if (!db) throw new Error("Database is not bound");
-  await ensureMarketSchema(db);
+  const hasMoneyline = gamesContainMoneyline(games);
+  if (hasMoneyline) await ensureMarketSchema(db);
 
   const selection = selectEarliestUpcomingWeek(games, now);
   let gamesUpserted = 0;
@@ -133,7 +142,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
         }
       }
 
-      if (Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))) {
+      if (hasMoneyline && Number.isFinite(Number(book.awayMoneyline)) && Number.isFinite(Number(book.homeMoneyline))) {
         const latestMoneyline = await latestMoneylineForSource(db, game.id, book.key);
         if (!moneylineChanged(latestMoneyline, book.awayMoneyline, book.homeMoneyline)) {
           moneylineSnapshotsUnchanged += 1;
