@@ -1,8 +1,8 @@
 import app from "./v010-entry.js";
 import { withSurvivorV0111Ui } from "./survivor-v0111-ui.js";
 
-const APP_VERSION = "0.11.1";
-const DEFAULT_SURVIVOR_ENTRIES = Object.freeze([
+export const APP_VERSION = "0.11.1";
+export const DEFAULT_SURVIVOR_ENTRIES = Object.freeze([
   "Muzzle 1",
   "Muzzle 2",
   "Muzzle 3",
@@ -22,7 +22,7 @@ function json(body, status = 200, headers = {}) {
   });
 }
 
-async function ensureDefaultSurvivorEntries(request, env) {
+export async function ensureDefaultSurvivorEntries(request, env) {
   if (!env?.DB || request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.pathname !== "/api/survivor/entries") return;
