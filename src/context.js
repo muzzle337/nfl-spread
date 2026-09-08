@@ -40,6 +40,10 @@ function sourceMatch(rows, game) {
   }) ?? null;
 }
 
+function matchup(game) {
+  return `${teamCode(game.away_team)} @ ${teamCode(game.home_team)}`;
+}
+
 async function upsertContextGame(db, game, context) {
   await db.prepare(`
     INSERT INTO context_games(
@@ -106,10 +110,11 @@ async function recordFromStoredResults(db, season, week, team) {
 
 async function upsertTeamMetrics(db, season, week, sourceRows, teams) {
   const normalizedRows = sourceRows.map(normalizeTeamMetric).filter((r) => r.team);
-  let count = 0;
+  let rowsWithAdvanced = 0;
   for (const team of teams) {
     const code = teamCode(team);
     const source = normalizedRows.find((r) => r.team === code) ?? {};
+    if (source.offensiveEpa !== null && source.offensiveEpa !== undefined || source.defensiveEpa !== null && source.defensiveEpa !== undefined || source.successRate !== null && source.successRate !== undefined) rowsWithAdvanced += 1;
     const record = await recordFromStoredResults(db, season, week, code);
     await db.prepare(`
       INSERT INTO context_team_metrics(
@@ -126,9 +131,8 @@ async function upsertTeamMetrics(db, season, week, sourceRows, teams) {
       record.pointsFor, record.pointsAgainst, record.pointDiff,
       source.offensiveEpa ?? null, source.defensiveEpa ?? null, source.successRate ?? null
     ).run();
-    count += 1;
   }
-  return count;
+  return { teamsStored: teams.length, sourceRows: normalizedRows.length, teamsWithAdvancedMetrics: rowsWithAdvanced };
 }
 
 export async function syncContext(db, season, week, { fetchImpl = fetch } = {}) {
@@ -138,26 +142,30 @@ export async function syncContext(db, season, week, { fetchImpl = fetch } = {}) 
   if (!games.length) throw new Error("No stored games for this week. Update Lines first.");
 
   let nflverseRows = [], nfldataGames = [], nfldataStats = [];
-  let nflverseOk = false, nfldataOk = false, weatherOk = false;
+  let nflverseOk = false, nfldataGamesOk = false, nfldataStatsOk = false;
   const errors = [];
 
   try { nflverseRows = await fetchNflverseWeek(season, week, fetchImpl); nflverseOk = true; }
   catch (error) { errors.push(`nflverse: ${error.message}`); }
-  try {
-    [nfldataGames, nfldataStats] = await Promise.all([
-      fetchNfldataGames(season, week, fetchImpl),
-      fetchNfldataTeamStats(season, week, fetchImpl)
-    ]);
-    nfldataOk = true;
-  } catch (error) { errors.push(`nfldata: ${error.message}`); }
+  try { nfldataGames = await fetchNfldataGames(season, week, fetchImpl); nfldataGamesOk = true; }
+  catch (error) { errors.push(`nfldata games: ${error.message}`); }
+  try { nfldataStats = await fetchNfldataTeamStats(season, week, fetchImpl); nfldataStatsOk = true; }
+  catch (error) { errors.push(`nfldata team stats: ${error.message}`); }
 
-  let gamesUpdated = 0, weatherUpdated = 0;
+  let nflverseMatched = 0, nfldataMatched = 0, weatherUpdated = 0, weatherSkipped = 0, weatherFailed = 0;
+  const nflverseUnmatched = [], nfldataUnmatched = [], weatherMissing = [];
   const teams = new Set();
+
   for (const game of games) {
     teams.add(teamCode(game.away_team)); teams.add(teamCode(game.home_team));
-    const context = mergeContextGame(sourceMatch(nflverseRows, game), sourceMatch(nfldataGames, game));
+    const nv = sourceMatch(nflverseRows, game);
+    const nd = sourceMatch(nfldataGames, game);
+    if (nv) nflverseMatched += 1; else nflverseUnmatched.push(matchup(game));
+    if (nd) nfldataMatched += 1; else nfldataUnmatched.push(matchup(game));
+
+    const context = mergeContextGame(nv, nd);
     await upsertContextGame(db, game, context);
-    gamesUpdated += 1;
+
     try {
       const weather = await fetchKickoffWeather({
         homeTeam: game.home_team,
@@ -166,17 +174,42 @@ export async function syncContext(db, season, week, { fetchImpl = fetch } = {}) 
         fetchImpl
       });
       if (await upsertWeather(db, game.id, weather)) weatherUpdated += 1;
-      weatherOk = true;
-    } catch (error) { errors.push(`weather ${game.id}: ${error.message}`); }
+      else { weatherSkipped += 1; weatherMissing.push(matchup(game)); }
+    } catch (error) {
+      weatherFailed += 1;
+      errors.push(`weather ${matchup(game)}: ${error.message}`);
+    }
   }
 
-  await upsertTeamMetrics(db, season, week, nfldataStats, [...teams]);
-  await db.prepare(`
+  const metricSummary = await upsertTeamMetrics(db, season, week, nfldataStats, [...teams]);
+  const weatherOk = weatherFailed === 0 && weatherUpdated > 0;
+  const nfldataOk = nfldataGamesOk && nfldataStatsOk;
+
+  const syncInsert = await db.prepare(`
     INSERT INTO context_sync_runs(season, week, nfldata_ok, nflverse_ok, weather_ok, games_updated, weather_updated)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(season, week, nfldataOk ? 1 : 0, nflverseOk ? 1 : 0, weatherOk ? 1 : 0, gamesUpdated, weatherUpdated).run();
+  `).bind(season, week, nfldataOk ? 1 : 0, nflverseOk ? 1 : 0, weatherOk ? 1 : 0, games.length, weatherUpdated).run();
 
-  return { season, week, gamesUpdated, weatherUpdated, sources: { nfldata: nfldataOk, nflverse: nflverseOk, openMeteo: weatherOk }, errors };
+  const diagnostics = {
+    storedGames: games.length,
+    nflverse: { requestOk: nflverseOk, rowsReturned: nflverseRows.length, matchedGames: nflverseMatched, unmatchedGames: nflverseUnmatched },
+    nfldataGames: { requestOk: nfldataGamesOk, rowsReturned: nfldataGames.length, matchedGames: nfldataMatched, unmatchedGames: nfldataUnmatched },
+    nfldataTeamStats: { requestOk: nfldataStatsOk, ...metricSummary },
+    openMeteo: { requestOk: weatherFailed === 0, forecastsStored: weatherUpdated, skippedOrUnavailable: weatherSkipped, failed: weatherFailed, noForecastGames: weatherMissing },
+    errors
+  };
+
+  const runId = Number(syncInsert?.meta?.last_row_id ?? syncInsert?.lastRowId ?? 0);
+  if (runId) {
+    await db.prepare(`INSERT OR REPLACE INTO context_sync_diagnostics(sync_run_id, details_json) VALUES (?, ?)`).bind(runId, JSON.stringify(diagnostics)).run();
+  }
+
+  return {
+    season, week,
+    sources: { nfldata: nfldataOk, nflverse: nflverseOk, openMeteo: weatherOk },
+    diagnostics,
+    errors
+  };
 }
 
 function makeObservation(kind, label, detail, side = null) {
@@ -212,16 +245,35 @@ export function buildContextObservations(game) {
   return out.slice(0, 5);
 }
 
+function qualityForGame(g) {
+  const checks = [
+    ["Venue", Boolean(g.stadium || g.roof || g.surface), "nflverse/nfldata"],
+    ["Weather", Boolean(g.weather), "Open-Meteo"],
+    ["Rest", g.awayRest !== null && g.homeRest !== null, "nflverse/nfldata"],
+    ["Coach", Boolean(g.awayCoach && g.homeCoach), "nflverse/nfldata"],
+    ["QB", Boolean(g.awayQb && g.homeQb), "nflverse/nfldata"],
+    ["Record", Boolean(g.awayMetrics && g.homeMetrics), "D1 results"],
+    ["Point diff", Boolean(g.awayMetrics && g.homeMetrics), "D1 results"],
+    ["EPA", Boolean(g.awayMetrics && g.homeMetrics && g.awayMetrics.offensiveEpa !== null && g.homeMetrics.offensiveEpa !== null), "nfldata"],
+    ["Success rate", Boolean(g.awayMetrics && g.homeMetrics && g.awayMetrics.successRate !== null && g.homeMetrics.successRate !== null), "nfldata"]
+  ];
+  const loaded = checks.filter(([, ok]) => ok).length;
+  return { loaded, total: checks.length, checks: checks.map(([label, ok, source]) => ({ label, ok, source })) };
+}
+
 export async function contextForWeek(db, season, week) {
   if (!db) throw new Error("Database is not bound");
   await ensureContextSchema(db);
   const games = await storedGames(db, season, week);
   const contextRows = await db.prepare(`SELECT * FROM context_games WHERE season = ? AND week = ?`).bind(season, week).all();
   const metricsRows = await db.prepare(`SELECT * FROM context_team_metrics WHERE season = ? AND week = ?`).bind(season, week).all();
-  const weatherRows = await db.prepare(`
-    SELECT w.* FROM context_weather w JOIN games g ON g.id = w.game_id WHERE g.season = ? AND g.week = ?
-  `).bind(season, week).all();
+  const weatherRows = await db.prepare(`SELECT w.* FROM context_weather w JOIN games g ON g.id = w.game_id WHERE g.season = ? AND g.week = ?`).bind(season, week).all();
   const sync = await db.prepare(`SELECT * FROM context_sync_runs WHERE season = ? AND week = ? ORDER BY id DESC LIMIT 1`).bind(season, week).first();
+  let diagnostics = null;
+  if (sync?.id) {
+    const d = await db.prepare(`SELECT details_json FROM context_sync_diagnostics WHERE sync_run_id = ?`).bind(sync.id).first();
+    if (d?.details_json) try { diagnostics = JSON.parse(d.details_json); } catch (_) {}
+  }
 
   const contextMap = new Map((contextRows.results ?? []).map((r) => [r.game_id, r]));
   const metricMap = new Map((metricsRows.results ?? []).map((r) => [r.team, r]));
@@ -232,30 +284,31 @@ export async function contextForWeek(db, season, week) {
     const awayCode = teamCode(game.away_team), homeCode = teamCode(game.home_team);
     const weatherRow = weatherMap.get(game.id) ?? null;
     const shapeMetric = (r) => r ? {
-      wins: finite(r.wins), losses: finite(r.losses), ties: finite(r.ties),
-      pointsFor: finite(r.points_for), pointsAgainst: finite(r.points_against), pointDiff: finite(r.point_diff),
-      offensiveEpa: finite(r.offensive_epa), defensiveEpa: finite(r.defensive_epa), successRate: finite(r.success_rate)
+      wins: finite(r.wins), losses: finite(r.losses), ties: finite(r.ties), pointsFor: finite(r.points_for), pointsAgainst: finite(r.points_against), pointDiff: finite(r.point_diff),
+      offensiveEpa: finite(r.offensive_epa), defensiveEpa: finite(r.defensive_epa), successRate: finite(r.success_rate), source: r.source, syncedAt: r.synced_at
     } : null;
     const shaped = {
       gameId: game.id, season: game.season, week: game.week, kickoffAt: game.kickoff_at,
       awayTeam: game.away_team, homeTeam: game.home_team, awayCode, homeCode,
       stadium: c.stadium ?? null, location: c.location ?? null, roof: c.roof ?? null, surface: c.surface ?? null,
-      awayRest: finite(c.away_rest), homeRest: finite(c.home_rest),
-      awayCoach: c.away_coach ?? null, homeCoach: c.home_coach ?? null,
-      awayQb: c.away_qb ?? null, homeQb: c.home_qb ?? null,
+      awayRest: finite(c.away_rest), homeRest: finite(c.home_rest), awayCoach: c.away_coach ?? null, homeCoach: c.home_coach ?? null, awayQb: c.away_qb ?? null, homeQb: c.home_qb ?? null,
       awayMetrics: shapeMetric(metricMap.get(awayCode)), homeMetrics: shapeMetric(metricMap.get(homeCode)),
+      sourceStatus: {
+        nflverse: c.nflverse_game_id ? "matched" : (sync ? (sync.nflverse_ok ? "unmatched" : "failed") : "not-imported"),
+        nfldata: c.nfldata_game_id ? "matched" : (sync ? (sync.nfldata_ok ? "unmatched" : "failed") : "not-imported")
+      },
+      contextSyncedAt: c.synced_at ?? null,
       weather: weatherRow ? {
-        forecastFor: weatherRow.forecast_for, temperatureF: finite(weatherRow.temperature_f), apparentTemperatureF: finite(weatherRow.apparent_temperature_f),
-        precipitationProbability: finite(weatherRow.precipitation_probability), precipitationIn: finite(weatherRow.precipitation_in),
-        snowfallIn: finite(weatherRow.snowfall_in), windMph: finite(weatherRow.wind_mph), gustMph: finite(weatherRow.gust_mph), weatherCode: finite(weatherRow.weather_code)
+        forecastFor: weatherRow.forecast_for, temperatureF: finite(weatherRow.temperature_f), apparentTemperatureF: finite(weatherRow.apparent_temperature_f), precipitationProbability: finite(weatherRow.precipitation_probability), precipitationIn: finite(weatherRow.precipitation_in), snowfallIn: finite(weatherRow.snowfall_in), windMph: finite(weatherRow.wind_mph), gustMph: finite(weatherRow.gust_mph), weatherCode: finite(weatherRow.weather_code), source: weatherRow.source, fetchedAt: weatherRow.fetched_at
       } : null
     };
+    shaped.quality = qualityForGame(shaped);
     return { ...shaped, observations: buildContextObservations(shaped) };
   });
 
   return {
     season: Number(season), week: Number(week), games: payload,
-    lastSync: sync ? { at: sync.created_at, sources: { nfldata: !!sync.nfldata_ok, nflverse: !!sync.nflverse_ok, openMeteo: !!sync.weather_ok } } : null,
+    lastSync: sync ? { at: sync.created_at, sources: { nfldata: !!sync.nfldata_ok, nflverse: !!sync.nflverse_ok, openMeteo: !!sync.weather_ok }, diagnostics } : null,
     principle: "Context surfaces things to notice. It does not change spread or Survivor probabilities."
   };
 }

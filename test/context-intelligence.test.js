@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildContextObservations } from "../src/context.js";
 import { mergeContextGame, normalizeScheduleRow, teamCode } from "../src/context-sources.js";
 import { withContextUi } from "../src/context-ui.js";
+import { withAdminPinUi } from "../src/admin-pin-ui.js";
 import { APP_VERSION, contextHealth } from "../src/v013-entry.js";
 
 test("team names normalize to nflverse abbreviations", () => {
@@ -59,20 +60,37 @@ test("context observations flag weather and rest without producing a pick", () =
   assert.ok(observations.every((o) => !("pick" in o) && !("probability" in o)));
 });
 
-test("dashboard context UI is compact, expandable in detail, and exposes a protected sync action", () => {
+test("context verification UI exposes source status data quality and sync diagnostics", () => {
   const html = withContextUi("<!doctype html><html><body><div id=\"app\"></div></body></html>");
-  assert.match(html, /ctx-mini/);
-  assert.match(html, /Context Intelligence/);
-  assert.match(html, /does not change %/);
-  assert.match(html, /data-context-sync/);
-  assert.match(html, /\/api\/context\/sync/);
-  assert.match(html, /nflverse · nfldata · Open-Meteo/);
+  assert.match(html, /Data Quality/);
+  assert.match(html, /sourceStatus/);
+  assert.match(html, /nflverse/);
+  assert.match(html, /nfldata/);
+  assert.match(html, /Open-Meteo/);
+  assert.match(html, /matchedGames/);
+  assert.match(html, /unmatchedGames/);
+  assert.match(html, /teamsWithAdvancedMetrics/);
+  assert.match(html, /Updating Context/);
+  assert.match(html, /Context Update Failed/);
+  assert.match(html, /Context Update Complete/);
 });
 
-test("v0.13 health advertises context sources and separation from predictions", () => {
+test("admin PIN UI makes checking success and failure visible", () => {
+  const html = withAdminPinUi("<!doctype html><html><body><input id=\"adminKey\"></body></html>");
+  assert.match(html, /Checking PIN/);
+  assert.match(html, /Admin Tools Unlocked/);
+  assert.match(html, /Incorrect PIN|Try the PIN again/);
+  assert.match(html, /Updating Lines/);
+  assert.match(html, /Checking Final Scores/);
+});
+
+test("v0.13.1 health advertises context diagnostics provenance and separation from predictions", () => {
   const body = contextHealth({ ok: true });
+  assert.equal(APP_VERSION, "0.13.1");
   assert.equal(body.version, APP_VERSION);
   assert.equal(body.contextIntelligence, true);
   assert.equal(body.contextAffectsPredictions, false);
+  assert.equal(body.contextDiagnostics, true);
+  assert.equal(body.contextProvenance, true);
   assert.deepEqual(body.contextSources, ["nfldata", "nflverse", "open-meteo"]);
 });
