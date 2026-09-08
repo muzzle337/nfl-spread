@@ -53,8 +53,8 @@ test("Picks view is isolated from dashboard Context watchlist decorators",()=>{
  assert.match(html,/data-pool17-view=\\?"picks\\?"/);
 });
 
-test("v0.17 is deployed as the public wrapper",()=>{
- assert.equal(APP_VERSION,"0.17.0");
+test("v0.17.1 hotfix is deployed as the public wrapper",()=>{
+ assert.equal(APP_VERSION,"0.17.1");
  const config=readFileSync(new URL("../wrangler.jsonc",import.meta.url),"utf8");
  assert.match(config,/"main"\s*:\s*"src\/v017-entry\.js"/);
 });
