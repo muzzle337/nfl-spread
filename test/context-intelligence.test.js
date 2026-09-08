@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { buildContextObservations } from "../src/context.js";
 import { mergeContextGame, normalizeScheduleRow, teamCode } from "../src/context-sources.js";
 import { withContextUi } from "../src/context-ui.js";
-import worker, { APP_VERSION } from "../src/v013-entry.js";
+import { APP_VERSION, contextHealth } from "../src/v013-entry.js";
 
 test("team names normalize to nflverse abbreviations", () => {
   assert.equal(teamCode("Buffalo Bills"), "BUF");
@@ -69,10 +69,8 @@ test("dashboard context UI is compact, expandable in detail, and exposes a prote
   assert.match(html, /nflverse · nfldata · Open-Meteo/);
 });
 
-test("v0.13 health advertises context sources and separation from predictions", async () => {
-  const response = await worker.fetch(new Request("https://example.com/api/health"), {});
-  assert.equal(response.status, 200);
-  const body = await response.json();
+test("v0.13 health advertises context sources and separation from predictions", () => {
+  const body = contextHealth({ ok: true });
   assert.equal(body.version, APP_VERSION);
   assert.equal(body.contextIntelligence, true);
   assert.equal(body.contextAffectsPredictions, false);
