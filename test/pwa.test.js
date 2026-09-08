@@ -112,7 +112,7 @@ test("public worker serves PWA assets and reports synchronized 0.9.0 version", a
   assert.equal((await healthResponse.json()).version, PUBLIC_APP_VERSION);
 });
 
-test("Cloudflare deploys the v0.13 wrapper as the worker entrypoint", () => {
+test("Cloudflare deploys the v0.14 wrapper as the worker entrypoint", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\s*:\s*"src\/v013-entry\.js"/);
+  assert.match(config, /"main"\s*:\s*"src\/v014-entry\.js"/);
 });
