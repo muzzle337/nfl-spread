@@ -29,8 +29,8 @@ export function withContextUi(html) {
   function detailCodes(){
     var title=document.querySelector('.detail-title');
     var text=title&&title.textContent?title.textContent.trim():'';
-    var m=text.match(/([A-Z]{2,3})\s*@\s*([A-Z]{2,3})/);
-    if(m)return [m[1],m[2]];
+    var parts=text.split('@');
+    if(parts.length===2){var away=parts[0].trim(),home=parts[1].trim();if(away&&home)return [away,home]}
     var heroes=[].map.call(document.querySelectorAll('.detail .hero-code'),function(n){return n.textContent.trim()});
     return heroes.length>=2?[heroes[0],heroes[1]]:null;
   }
@@ -71,12 +71,12 @@ export function withContextUi(html) {
   function renderDetail(){
     var detail=document.querySelector('.detail-content');if(!detail)return;
     var codes=detailCodes();if(!codes)return;
-    var existing=detail.querySelector('.ctx-detail');var html;
-    if(ctxError)html=placeholderHtml('Context data could not load: '+ctxError,true);
-    else if(!ctxData)html=placeholderHtml('Loading Context Intelligence…',false);
-    else {var g=findGame(codes[0],codes[1]);html=g?detailHtml(g):placeholderHtml('Context API loaded, but '+codes[0]+' @ '+codes[1]+' was not found in the current-week Context payload.',true)}
-    if(existing){if(existing.outerHTML!==html)existing.outerHTML=html;return}
-    detail.insertAdjacentHTML('afterbegin',html)
+    var existing=detail.querySelector('.ctx-detail');var panel;
+    if(ctxError)panel=placeholderHtml('Context data could not load: '+ctxError,true);
+    else if(!ctxData)panel=placeholderHtml('Loading Context Intelligence…',false);
+    else {var g=findGame(codes[0],codes[1]);panel=g?detailHtml(g):placeholderHtml('Context API loaded, but '+codes[0]+' @ '+codes[1]+' was not found in the current-week Context payload.',true)}
+    if(existing){if(existing.outerHTML!==panel)existing.outerHTML=panel;return}
+    detail.insertAdjacentHTML('afterbegin',panel)
   }
   function decorateCards(){
     document.querySelectorAll('.game-card').forEach(function(card){
@@ -98,8 +98,18 @@ export function withContextUi(html) {
     finally{loading=false}
   }
   function addToolButton(){var section=[].find.call(document.querySelectorAll('.section'),function(s){return /Manual Actions/i.test(s.textContent||'')});if(!section||section.querySelector('[data-context-sync]'))return;var b=document.createElement('button');b.className='tool-action';b.setAttribute('data-context-sync','1');b.innerHTML='<span class="tool-icon">◇</span><span><span class="tool-name">Update Context</span><span class="tool-desc">Refresh nflverse, nfldata and kickoff weather. Free context data; does not change picks.</span><span class="ctx-sync-status" data-context-status>Ready</span></span><span class="chev">›</span>';b.addEventListener('click',runSync);var actions=section.querySelectorAll('.tool-action');if(actions.length)actions[actions.length-1].insertAdjacentElement('afterend',b);else section.appendChild(b)}
-  function summaryText(b){var d=b&&b.diagnostics||{},nv=d.nflverse||{},ng=d.nfldataGames||{},ns=d.nfldataTeamStats||{},om=d.openMeteo||{};return '✅ Context Update Complete\n\nStored games: '+(d.storedGames||0)+'\nnflverse: '+(nv.matchedGames||0)+'/'+(d.storedGames||0)+' matched · '+(nv.rowsReturned||0)+' rows\nnfldata games: '+(ng.matchedGames||0)+'/'+(d.storedGames||0)+' matched · '+(ng.rowsReturned||0)+' rows\nnfldata team stats: '+(ns.teamsWithAdvancedMetrics||0)+' teams with advanced metrics · '+(ns.sourceRows||0)+' source rows\nOpen-Meteo: '+(om.forecastsStored||0)+' forecasts stored · '+(om.skippedOrUnavailable||0)+' unavailable · '+(om.failed||0)+' failed\n\nUnmatched nflverse: '+((nv.unmatchedGames||[]).join(', ')||'none')+'\nUnmatched nfldata: '+((ng.unmatchedGames||[]).join(', ')||'none')+'\nNo forecast: '+((om.noForecastGames||[]).join(', ')||'none')+((b.errors&&b.errors.length)?'\n\nErrors:\n- '+b.errors.join('\n- '):'')}
-  async function runSync(ev){var btn=ev.currentTarget,out=document.getElementById('toolResult'),status=btn.querySelector('[data-context-status]');btn.disabled=true;if(status)status.textContent='⏳ Updating Context…';if(out)out.textContent='⏳ Updating Context Intelligence…';try{var d=await getJson('/api/dashboard/nfl');var b=await getJson('/api/context/sync?season='+encodeURIComponent(d.season)+'&week='+encodeURIComponent(d.week),{method:'POST'});if(status)status.textContent='✅ Context Updated';if(out)out.textContent=summaryText(b);await ensureData(true)}catch(e){if(status)status.textContent='❌ Context Update Failed';if(out)out.textContent='❌ Context Update Failed\n'+e.message;ctxError=e.message;decorate()}finally{btn.disabled=false}}
+  function summaryText(b){
+    var d=b&&b.diagnostics||{},nv=d.nflverse||{},ng=d.nfldataGames||{},ns=d.nfldataTeamStats||{},om=d.openMeteo||{};
+    return JSON.stringify({
+      status:'Context Update Complete',storedGames:d.storedGames||0,
+      nflverse:{matched:nv.matchedGames||0,rows:nv.rowsReturned||0,unmatched:nv.unmatchedGames||[]},
+      nfldataGames:{matched:ng.matchedGames||0,rows:ng.rowsReturned||0,unmatched:ng.unmatchedGames||[]},
+      nfldataTeamStats:{advancedTeams:ns.teamsWithAdvancedMetrics||0,sourceRows:ns.sourceRows||0,teamsStored:ns.teamsStored||0},
+      openMeteo:{forecastsStored:om.forecastsStored||0,unavailable:om.skippedOrUnavailable||0,failed:om.failed||0,noForecastGames:om.noForecastGames||[]},
+      errors:b&&b.errors||[]
+    },null,2)
+  }
+  async function runSync(ev){var btn=ev.currentTarget,out=document.getElementById('toolResult'),status=btn.querySelector('[data-context-status]');btn.disabled=true;if(status)status.textContent='⏳ Updating Context…';if(out)out.textContent='⏳ Updating Context Intelligence…';try{var d=await getJson('/api/dashboard/nfl');var b=await getJson('/api/context/sync?season='+encodeURIComponent(d.season)+'&week='+encodeURIComponent(d.week),{method:'POST'});if(status)status.textContent='✅ Context Updated';if(out)out.textContent=summaryText(b);await ensureData(true)}catch(e){if(status)status.textContent='❌ Context Update Failed';if(out)out.textContent='❌ Context Update Failed: '+e.message;ctxError=e.message;decorate()}finally{btn.disabled=false}}
   var root=document.getElementById('app')||document.documentElement;new MutationObserver(function(){decorate();if(!ctxData&&!loading&&!ctxError)ensureData(false)}).observe(root,{childList:true,subtree:true});
   decorate();ensureData(false);
 })();
