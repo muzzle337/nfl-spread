@@ -17,6 +17,16 @@ function json(body, status = 200, headers = {}) {
   });
 }
 
+export function contextHealth(body = {}) {
+  return {
+    ...body,
+    version: APP_VERSION,
+    contextIntelligence: true,
+    contextSources: ["nfldata", "nflverse", "open-meteo"],
+    contextAffectsPredictions: false
+  };
+}
+
 async function contextRoute(request, env, url) {
   if (!url.pathname.startsWith("/api/context/")) return null;
   if (!env.DB) return json({ error: "Database is not bound" }, 503);
@@ -51,13 +61,7 @@ async function upgradeResponse(request, response) {
   if (url.pathname === "/api/health") {
     const body = await response.json().catch(() => null);
     if (!body || typeof body !== "object") return response;
-    return json({
-      ...body,
-      version: APP_VERSION,
-      contextIntelligence: true,
-      contextSources: ["nfldata", "nflverse", "open-meteo"],
-      contextAffectsPredictions: false
-    }, response.status, response.headers);
+    return json(contextHealth(body), response.status, response.headers);
   }
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) {
