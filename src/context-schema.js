@@ -61,6 +61,11 @@ export async function ensureContextSchema(db) {
       games_updated INTEGER NOT NULL DEFAULT 0,
       weather_updated INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS context_sync_diagnostics (
+      sync_run_id INTEGER PRIMARY KEY,
+      details_json TEXT NOT NULL,
+      FOREIGN KEY(sync_run_id) REFERENCES context_sync_runs(id)
     )`
   ];
   for (const statement of statements) await db.prepare(statement).run();
