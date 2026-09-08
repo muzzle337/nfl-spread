@@ -1,7 +1,7 @@
 import app from "./v016-entry.js";
 import { isAdminSessionAuthorized } from "./admin-session.js";
 import { resolveDashboardWeek } from "./dashboard-data.js";
-import { weeklyGameOutlooks, saveWeeklyPick } from "./weekly-picks.js";
+import { weeklyGameOutlooks, saveWeeklyPick, poolSeasonSummary } from "./weekly-picks.js";
 import { withGameOutlookPicksUi } from "./game-outlook-picks-ui.js";
 
 export const APP_VERSION="0.17.0";
@@ -9,7 +9,8 @@ function json(body,status=200,headers={}){return new Response(JSON.stringify(bod
 function replaceVersions(body){return String(body).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION).split("0.13.2").join(APP_VERSION).split("0.13.3").join(APP_VERSION).split("0.14.0").join(APP_VERSION).split("0.15.0").join(APP_VERSION).split("0.16.0").join(APP_VERSION)}
 
 async function target(env,url){
- const s=Number(url.searchParams.get('season')),w=Number(url.searchParams.get('week'));
+ const rawS=url.searchParams.get('season'),rawW=url.searchParams.get('week');
+ const s=rawS===null?null:Number(rawS),w=rawW===null?null:Number(rawW);
  if(Number.isInteger(s)&&Number.isInteger(w))return {season:s,week:w};
  return resolveDashboardWeek(env.DB);
 }
@@ -19,7 +20,7 @@ async function poolRoute(request,env,url){
  if(!env.DB)return json({error:'Database is not bound'},503);
  if(url.pathname==='/api/pool/outlooks'&&request.method==='GET'){
   const t=await target(env,url);if(!Number.isInteger(t.season)||!Number.isInteger(t.week))return json({error:'No active NFL week is available'},400);
-  try{return json({ok:true,season:t.season,week:t.week,games:await weeklyGameOutlooks(env.DB,t.season,t.week),principle:'Game Outlook explains agreement and conflict across market, current-season spread, history and context. It does not manufacture a new probability.',percentageLabel:'market_no_vig_win_probability'});}catch(error){return json({error:'Game Outlook unavailable',message:error.message},400)}
+  try{const [games,summary]=await Promise.all([weeklyGameOutlooks(env.DB,t.season,t.week),poolSeasonSummary(env.DB,t.season)]);return json({ok:true,season:t.season,week:t.week,games,summary,principle:'Game Outlook explains agreement and conflict across market, current-season spread, history and context. It does not manufacture a new probability.',percentageLabel:'market_no_vig_win_probability'});}catch(error){return json({error:'Game Outlook unavailable',message:error.message},400)}
  }
  if(url.pathname==='/api/pool/picks'&&request.method==='POST'){
   const auth=await isAdminSessionAuthorized(request,env);if(!auth.ok)return json({error:auth.error},auth.status);
@@ -33,7 +34,7 @@ async function upgrade(request,response){
  const url=new URL(request.url);
  if(url.pathname==='/api/health'){
   const b=await response.json().catch(()=>null);if(!b||typeof b!=='object')return response;
-  return json({...b,version:APP_VERSION,gameOutlook:true,weeklyPoolPicks:true,imessageExport:true,publicPickPercentage:false,weeklyPoolPercentageBasis:'consensus no-vig market win probability',gameOutlookAffectsPredictions:false},response.status,response.headers);
+  return json({...b,version:APP_VERSION,gameOutlook:true,weeklyPoolPicks:true,weeklyPoolGrading:true,imessageExport:true,publicPickPercentage:false,weeklyPoolPercentageBasis:'consensus no-vig market win probability',gameOutlookAffectsPredictions:false},response.status,response.headers);
  }
  if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
   if(!response.ok)return response;return new Response(withGameOutlookPicksUi(replaceVersions(await response.text())),{status:response.status,headers:response.headers});
