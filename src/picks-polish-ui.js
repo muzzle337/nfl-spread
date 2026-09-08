@@ -6,7 +6,7 @@ export function withPicksPolishUi(html){
 </style>
 <script>
 (function(){
- var busy=false,last='';
+ var busy=false,last='',gradedView=null;
  function fixNav(){
   var nav=document.querySelector('.bottom-nav');if(!nav)return;
   var buttons=[].slice.call(nav.querySelectorAll('.nav-btn'));
@@ -14,8 +14,10 @@ export function withPicksPolishUi(html){
   var picks=nav.querySelector('[data-pool17-nav]');var games=[].slice.call(nav.querySelectorAll('.nav-btn')).find(function(b){return /Games/i.test(b.textContent||'')});
   if(picks&&games&&games.nextElementSibling!==picks)nav.insertBefore(picks,games.nextElementSibling);
  }
- async function grade(){
-  var wrap=document.querySelector('.pool17-wrap');if(!wrap||busy)return;busy=true;
+ async function grade(force){
+  var wrap=document.querySelector('.pool17-wrap');if(!wrap||busy)return;
+  if(!force&&gradedView===wrap)return;
+  gradedView=wrap;busy=true;
   try{
    var r=await fetch('/api/pool/outlooks',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;var d=await r.json();
    var key=JSON.stringify([d.summary,d.games&&d.games.map(function(g){return[g.gameId,g.pickResult]})]);if(key===last)return;last=key;
@@ -24,8 +26,11 @@ export function withPicksPolishUi(html){
    (d.games||[]).forEach(function(g){var card=wrap.querySelector('[data-pool17-game="'+g.gameId+'"]');if(!card)return;var oldScore=card.querySelector('[data-pool17-score]');if(oldScore)oldScore.remove();if(!g.pickResult)return;var x=document.createElement('div');x.className='pool17-scoreline '+g.pickResult;x.setAttribute('data-pool17-score','1');x.textContent=g.pickResult==='CORRECT'?'✓ Correct':g.pickResult==='WRONG'?'✕ Wrong':'Push / tie';card.appendChild(x)})
   }catch(e){}finally{busy=false}
  }
- function tick(){fixNav();grade()}
- var i=0,t=setInterval(function(){tick();i++;if(i>40)clearInterval(t)},250);document.addEventListener('click',function(){setTimeout(tick,100)},true);setInterval(tick,5000);
+ function tick(){fixNav();grade(false)}
+ var i=0,t=setInterval(function(){tick();i++;if(i>40)clearInterval(t)},250);
+ document.addEventListener('click',function(ev){
+  setTimeout(function(){fixNav();var target=ev.target&&ev.target.closest?ev.target.closest('[data-pool17-nav],[data-pool17-pick]'):null;if(target)grade(true);else grade(false)},120)
+ },true);
 })();
 </script>`;
  return html.includes('</body>')?html.replace('</body>',ext+'</body>'):html+ext;
