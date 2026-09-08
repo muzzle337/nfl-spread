@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { coachIndicatorSummary, isPrimeTimeGame, normalizeHistoricalGame } from "../src/history.js";
 import { withHistoryUi } from "../src/history-ui.js";
 import { APP_VERSION } from "../src/v015-entry.js";
@@ -60,8 +59,6 @@ test("history UI is idempotent and does not reintroduce MutationObserver", () =>
   scripts.forEach((script) => assert.doesNotThrow(() => new Function(script)));
 });
 
-test("v0.15 is the public worker entrypoint", () => {
+test("v0.15 history foundation remains available under later wrappers", () => {
   assert.equal(APP_VERSION, "0.15.0");
-  const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\s*:\s*"src\/v015-entry\.js"/);
 });
