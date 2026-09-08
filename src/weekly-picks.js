@@ -16,6 +16,16 @@ export async function ensureWeeklyPicksSchema(db){
   )`).run();
 }
 
+async function ensureWeeklyOutlookCacheSchema(db){
+  await db.prepare(`CREATE TABLE IF NOT EXISTS weekly_outlook_cache(
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    payload_json TEXT NOT NULL,
+    built_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(season,week)
+  )`).run();
+}
+
 export async function listWeeklyPicks(db,season,week){
   await ensureWeeklyPicksSchema(db);
   const r=await db.prepare(`SELECT game_id,team,updated_at FROM weekly_pool_picks WHERE season=? AND week=? ORDER BY game_id`).bind(season,week).all();
@@ -104,19 +114,17 @@ export async function poolSeasonSummary(db,season){
   return {correct,wrong,pending,decided:correct+wrong,accuracy:(correct+wrong)?Math.round(correct/(correct+wrong)*1000)/10:null,weeks:[...weeks.values()]};
 }
 
-export async function weeklyGameOutlooks(db,season,week){
-  const [dash,ctx,moves,picks,results]=await Promise.all([
-    projectionsForWeek(db,season,week),contextForWeek(db,season,week),lineMovementsForWeek(db,season,week),listWeeklyPicks(db,season,week),resultsForWeek(db,season,week)
+async function buildWeeklyOutlookBase(db,season,week){
+  const [dash,ctx,moves]=await Promise.all([
+    projectionsForWeek(db,season,week),contextForWeek(db,season,week),lineMovementsForWeek(db,season,week)
   ]);
   const hist=await historicalIndicatorsForWeek(db,ctx.games||[],{startSeason:2015,endSeason:2025});
   const cBy=new Map((ctx.games||[]).map(g=>[g.gameId,g]));
   const hBy=new Map((hist||[]).map(g=>[g.gameId,g]));
   const mBy=new Map((moves||[]).map(g=>[g.gameId,g]));
-  const pBy=new Map((picks||[]).map(p=>[p.gameId,p]));
   return (dash.games||[]).map(g=>{
-    const c=cBy.get(g.id)||null,h=hBy.get(g.id)||null,m=mBy.get(g.id)||null,p=pBy.get(g.id)||null;
+    const c=cBy.get(g.id)||null,h=hBy.get(g.id)||null,m=mBy.get(g.id)||null;
     const label=outlookLabel(g,h,null);
-    const stored=results.get(String(g.id));
     return {
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
       spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
@@ -124,7 +132,48 @@ export async function weeklyGameOutlooks(db,season,week){
       movement:m?{...m,text:movementText(m)}:null,
       history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount}:null,
       context:c?{venue:[c.stadium,c.roof,c.surface].filter(Boolean).join(' · '),weather:c.weather,rest:{away:c.awayRest,home:c.homeRest},observations:c.observations||[],quality:c.quality}:null,
-      outlook:label,pick:p?.team||null,pickResult:pickResult(stored,p?.team||null),final:stored&&stored.status==='COMPLETED'?{awayScore:Number(stored.away_score),homeScore:Number(stored.home_score)}:null
+      outlook:label
     };
   });
+}
+
+async function cachedWeeklyOutlookBase(db,season,week){
+  await ensureWeeklyOutlookCacheSchema(db);
+  const row=await db.prepare(`SELECT payload_json,built_at FROM weekly_outlook_cache WHERE season=? AND week=? LIMIT 1`).bind(season,week).first();
+  if(row?.payload_json){
+    try{return {games:JSON.parse(row.payload_json),cache:{hit:true,builtAt:row.built_at}}}catch{}
+  }
+  const games=await buildWeeklyOutlookBase(db,season,week);
+  await db.prepare(`INSERT INTO weekly_outlook_cache(season,week,payload_json,built_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(season,week) DO UPDATE SET payload_json=excluded.payload_json,built_at=CURRENT_TIMESTAMP`)
+    .bind(season,week,JSON.stringify(games)).run();
+  return {games,cache:{hit:false,builtAt:null}};
+}
+
+export async function invalidateWeeklyOutlookCache(db,season=null,week=null){
+  await ensureWeeklyOutlookCacheSchema(db);
+  if(Number.isInteger(Number(season))&&Number.isInteger(Number(week))){
+    await db.prepare(`DELETE FROM weekly_outlook_cache WHERE season=? AND week=?`).bind(Number(season),Number(week)).run();
+    return {scope:'week',season:Number(season),week:Number(week)};
+  }
+  await db.prepare(`DELETE FROM weekly_outlook_cache`).run();
+  return {scope:'all'};
+}
+
+export async function weeklyOutlookCacheStatus(db,season,week){
+  await ensureWeeklyOutlookCacheSchema(db);
+  const row=await db.prepare(`SELECT built_at FROM weekly_outlook_cache WHERE season=? AND week=? LIMIT 1`).bind(season,week).first();
+  return {cached:Boolean(row),builtAt:row?.built_at??null};
+}
+
+export async function weeklyGameOutlooks(db,season,week){
+  const base=await cachedWeeklyOutlookBase(db,season,week);
+  const [picks,results]=await Promise.all([listWeeklyPicks(db,season,week),resultsForWeek(db,season,week)]);
+  const pBy=new Map((picks||[]).map(p=>[p.gameId,p]));
+  const games=(base.games||[]).map(g=>{
+    const p=pBy.get(g.gameId)||null,stored=results.get(String(g.gameId));
+    return {...g,pick:p?.team||null,pickResult:pickResult(stored,p?.team||null),final:stored&&stored.status==='COMPLETED'?{awayScore:Number(stored.away_score),homeScore:Number(stored.home_score)}:null};
+  });
+  Object.defineProperty(games,'cache',{value:base.cache,enumerable:false});
+  return games;
 }
