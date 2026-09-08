@@ -47,6 +47,12 @@ test("Weekly Picks UI includes Picks tab, iMessage export, market labels and no 
  scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
+test("Picks view is isolated from dashboard Context watchlist decorators",()=>{
+ const html=withGameOutlookPicksUi('<!doctype html><html><body><div class="bottom-nav"></div><div id="app"></div></body></html>');
+ assert.match(html,/pool17-wrap detail/);
+ assert.match(html,/data-pool17-view=\\?"picks\\?"/);
+});
+
 test("v0.17 is deployed as the public wrapper",()=>{
  assert.equal(APP_VERSION,"0.17.0");
  const config=readFileSync(new URL("../wrangler.jsonc",import.meta.url),"utf8");
