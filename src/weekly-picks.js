@@ -39,23 +39,21 @@ function notableSummary(side){
 }
 
 function movementText(m){
-  const mag=finite(m?.movementMagnitude); if(mag===null||mag===0)return 'Line stable';
+  const mag=finite(m?.movementMagnitude);if(mag===null||mag===0)return 'Line stable';
   const toward=m.direction==='TOWARD_AWAY'?m.awayTeam:m.direction==='TOWARD_HOME'?m.homeTeam:null;
   return toward?`Line moved ${mag} toward ${toward}`:`Line moved ${mag}`;
 }
 
-function outlookLabel(game,history,ctx,movement){
+export function outlookLabel(game,history,context){
   const awayP=finite(game.moneyline?.awayWinProbability),homeP=finite(game.moneyline?.homeWinProbability);
   const outright=awayP===null&&homeP===null?null:(awayP>=homeP?game.awayTeam:game.homeTeam);
   const spread=game.projectedTeam||null;
   const histAway=(history?.away?.notable||[]).length,histHome=(history?.home?.notable||[]).length;
   const histSide=histAway===histHome?null:(histAway>histHome?game.awayTeam:game.homeTeam);
-  const ctxOpp=(ctx?.opportunity||null);
-  const directional=ctxOpp?.directionalTeam||null;
-  const signals=[outright,spread,histSide,directional].filter(Boolean);
-  const counts=new Map(); for(const s of signals)counts.set(s,(counts.get(s)||0)+1);
-  const ranked=[...counts.entries()].sort((a,b)=>b[1]-a[1]);
-  const leader=ranked[0]||null;
+  const contextSide=context?.directionalTeam||null;
+  const signals=[outright,spread,histSide,contextSide].filter(Boolean);
+  const counts=new Map();for(const s of signals)counts.set(s,(counts.get(s)||0)+1);
+  const ranked=[...counts.entries()].sort((a,b)=>b[1]-a[1]);const leader=ranked[0]||null;
   if(!leader)return {level:'LOW INFO',team:null,reason:'Not enough directional information yet.'};
   if(leader[1]>=3)return {level:'STRONG AGREEMENT',team:leader[0],reason:'Multiple independent indicators point the same way.'};
   if(leader[1]===2&&signals.length>=3)return {level:'MIXED',team:leader[0],reason:'Some indicators agree, but meaningful signals conflict.'};
@@ -64,18 +62,17 @@ function outlookLabel(game,history,ctx,movement){
 }
 
 export async function weeklyGameOutlooks(db,season,week){
-  const [dash,ctx,hist,moves,picks]=await Promise.all([
-    dashboardSnapshot(db), contextForWeek(db,season,week), listWeeklyPicks(db,season,week), lineMovementsForWeek(db,season,week), listWeeklyPicks(db,season,week)
-  ]).then(async ([d,c,_ignored,m,p])=>[d,c,await historicalIndicatorsForWeek(db,c.games,{startSeason:2015,endSeason:2025}),m,p]);
+  const [dash,ctx,moves,picks]=await Promise.all([
+    dashboardSnapshot(db),contextForWeek(db,season,week),lineMovementsForWeek(db,season,week),listWeeklyPicks(db,season,week)
+  ]);
+  const hist=await historicalIndicatorsForWeek(db,ctx.games||[],{startSeason:2015,endSeason:2025});
   const cBy=new Map((ctx.games||[]).map(g=>[g.gameId,g]));
   const hBy=new Map((hist||[]).map(g=>[g.gameId,g]));
   const mBy=new Map((moves||[]).map(g=>[g.gameId,g]));
   const pBy=new Map((picks||[]).map(p=>[p.gameId,p]));
   return (dash.games||[]).map(g=>{
     const c=cBy.get(g.id)||null,h=hBy.get(g.id)||null,m=mBy.get(g.id)||null;
-    const opportunity=c?.observations?.length?{signals:c.observations,directionalTeam:null}:null;
-    const ctxPack=c?{...c,opportunity}:null;
-    const label=outlookLabel(g,h,ctxPack,m);
+    const label=outlookLabel(g,h,null);
     return {
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
       spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
