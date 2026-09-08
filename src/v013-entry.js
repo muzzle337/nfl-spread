@@ -3,7 +3,7 @@ import { isAdminSessionAuthorized } from "./admin-session.js";
 import { contextForWeek, syncContext } from "./context.js";
 import { ensureContextSchema } from "./context-schema.js";
 
-export const APP_VERSION = "0.13.2";
+export const APP_VERSION = "0.13.3";
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -27,7 +27,8 @@ export function contextHealth(body = {}) {
     contextProvenance: true,
     contextRenderingHardened: true,
     contextFullCapturedFields: true,
-    contextUiTemporarilyDisabled: true
+    contextUiTemporarilyDisabled: true,
+    mobileCacheRecovery: true
   };
 }
 
@@ -60,6 +61,14 @@ async function contextRoute(request, env, url) {
   return json({ error: "Method not allowed" }, 405);
 }
 
+function replaceKnownAppVersions(body) {
+  return body
+    .split("0.12.0").join(APP_VERSION)
+    .split("0.13.0").join(APP_VERSION)
+    .split("0.13.1").join(APP_VERSION)
+    .split("0.13.2").join(APP_VERSION);
+}
+
 async function upgradeResponse(request, response) {
   const url = new URL(request.url);
   if (url.pathname === "/api/health") {
@@ -70,15 +79,15 @@ async function upgradeResponse(request, response) {
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) {
     if (!response.ok) return response;
-    const body = (await response.text()).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION);
+    const body = replaceKnownAppVersions(await response.text());
     // Emergency production safeguard: Context UI injection is disabled until the
-    // MutationObserver renderer is made idempotent. Context APIs and stored data remain live.
+    // renderer is made idempotent. Context APIs and stored data remain live.
     return new Response(body, { status: response.status, headers: response.headers });
   }
 
   if (request.method === "GET" && url.pathname === "/sw.js") {
     if (!response.ok) return response;
-    const body = (await response.text()).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION);
+    const body = replaceKnownAppVersions(await response.text());
     return new Response(body, { status: response.status, headers: response.headers });
   }
 
