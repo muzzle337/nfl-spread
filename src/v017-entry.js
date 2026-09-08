@@ -5,9 +5,9 @@ import { weeklyGameOutlooks, saveWeeklyPick, poolSeasonSummary } from "./weekly-
 import { withGameOutlookPicksUi } from "./game-outlook-picks-ui.js";
 import { withPicksPolishUi } from "./picks-polish-ui.js";
 
-export const APP_VERSION="0.17.0";
+export const APP_VERSION="0.17.1";
 function json(body,status=200,headers={}){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}})}
-function replaceVersions(body){return String(body).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION).split("0.13.2").join(APP_VERSION).split("0.13.3").join(APP_VERSION).split("0.14.0").join(APP_VERSION).split("0.15.0").join(APP_VERSION).split("0.16.0").join(APP_VERSION)}
+function replaceVersions(body){return String(body).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION).split("0.13.2").join(APP_VERSION).split("0.13.3").join(APP_VERSION).split("0.14.0").join(APP_VERSION).split("0.15.0").join(APP_VERSION).split("0.16.0").join(APP_VERSION).split("0.17.0").join(APP_VERSION)}
 
 async function target(env,url){
  const rawS=url.searchParams.get('season'),rawW=url.searchParams.get('week');
