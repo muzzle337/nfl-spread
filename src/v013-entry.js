@@ -2,7 +2,6 @@ import app from "./v012-entry.js";
 import { isAdminSessionAuthorized } from "./admin-session.js";
 import { contextForWeek, syncContext } from "./context.js";
 import { ensureContextSchema } from "./context-schema.js";
-import { withContextUi } from "./context-ui.js";
 
 export const APP_VERSION = "0.13.2";
 
@@ -27,7 +26,8 @@ export function contextHealth(body = {}) {
     contextDiagnostics: true,
     contextProvenance: true,
     contextRenderingHardened: true,
-    contextFullCapturedFields: true
+    contextFullCapturedFields: true,
+    contextUiTemporarilyDisabled: true
   };
 }
 
@@ -70,19 +70,15 @@ async function upgradeResponse(request, response) {
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) {
     if (!response.ok) return response;
-    const body = (await response.text())
-      .split("0.12.0").join(APP_VERSION)
-      .split("0.13.0").join(APP_VERSION)
-      .split("0.13.1").join(APP_VERSION);
-    return new Response(withContextUi(body), { status: response.status, headers: response.headers });
+    const body = (await response.text()).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION);
+    // Emergency production safeguard: Context UI injection is disabled until the
+    // MutationObserver renderer is made idempotent. Context APIs and stored data remain live.
+    return new Response(body, { status: response.status, headers: response.headers });
   }
 
   if (request.method === "GET" && url.pathname === "/sw.js") {
     if (!response.ok) return response;
-    const body = (await response.text())
-      .split("0.12.0").join(APP_VERSION)
-      .split("0.13.0").join(APP_VERSION)
-      .split("0.13.1").join(APP_VERSION);
+    const body = (await response.text()).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION);
     return new Response(body, { status: response.status, headers: response.headers });
   }
 
