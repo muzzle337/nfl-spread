@@ -1,9 +1,9 @@
 import app from "./v017-entry.js";
 import { withStabilityUi } from "./stability-ui.js";
 
-export const APP_VERSION="0.18.0";
+export const APP_VERSION="0.18.1";
 function json(body,status=200,headers={}){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}})}
-function replaceVersions(body){return String(body).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION).split("0.13.2").join(APP_VERSION).split("0.13.3").join(APP_VERSION).split("0.14.0").join(APP_VERSION).split("0.15.0").join(APP_VERSION).split("0.16.0").join(APP_VERSION).split("0.17.0").join(APP_VERSION).split("0.17.1").join(APP_VERSION)}
+function replaceVersions(body){return String(body).split("0.12.0").join(APP_VERSION).split("0.13.0").join(APP_VERSION).split("0.13.1").join(APP_VERSION).split("0.13.2").join(APP_VERSION).split("0.13.3").join(APP_VERSION).split("0.14.0").join(APP_VERSION).split("0.15.0").join(APP_VERSION).split("0.16.0").join(APP_VERSION).split("0.17.0").join(APP_VERSION).split("0.17.1").join(APP_VERSION).split("0.18.0").join(APP_VERSION)}
 
 async function inspect(request,env,ctx,path){
   try{
@@ -26,7 +26,7 @@ async function upgrade(request,response){
   const url=new URL(request.url);
   if(url.pathname==='/api/health'){
     const body=await response.json().catch(()=>null);if(!body||typeof body!=='object')return response;
-    return json({...body,version:APP_VERSION,stabilityAudit:true,viewIsolation:true,uiDedupeGuard:true,contractDiagnostics:true,browserRegressionGate:true},response.status,response.headers);
+    return json({...body,version:APP_VERSION,stabilityAudit:true,viewIsolation:true,uiDedupeGuard:true,contractDiagnostics:true,browserRegressionGate:true,d1ReadHotfix:true,picksContinuousPolling:false},response.status,response.headers);
   }
   if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
     if(!response.ok)return response;return new Response(withStabilityUi(replaceVersions(await response.text())),{status:response.status,headers:response.headers});
