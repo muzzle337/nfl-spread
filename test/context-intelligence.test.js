@@ -60,13 +60,34 @@ test("context observations flag weather and rest without producing a pick", () =
   assert.ok(observations.every((o) => !("pick" in o) && !("probability" in o)));
 });
 
+test("context UI always mounts a visible detail state and does not silently swallow API failures", () => {
+  const html = withContextUi("<!doctype html><html><body><div id=\"app\"></div></body></html>");
+  assert.match(html, /Loading Context Intelligence/);
+  assert.match(html, /Context data could not load/);
+  assert.match(html, /Context API loaded, but/);
+  assert.match(html, /ctxError/);
+  assert.match(html, /getJson/);
+});
+
+test("context UI surfaces all captured weather and team metric fields", () => {
+  const html = withContextUi("<!doctype html><html><body><div id=\"app\"></div></body></html>");
+  for (const token of [
+    "Temperature", "Feels like", "Wind", "Gusts", "Precip chance", "Precip amount", "Snowfall", "Weather code",
+    "Points for", "Points against", "Point diff", "Off EPA", "Def EPA", "Success rate", "Rest", "Coach", "QB",
+    "Forecast hour", "Metrics:", "Data Quality", "nflverse", "nfldata", "Open-Meteo"
+  ]) assert.match(html, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("embedded Context browser script compiles", () => {
+  const html = withContextUi("<!doctype html><html><body><div id=\"app\"></div></body></html>");
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.ok(scripts.length > 0);
+  for (const script of scripts) assert.doesNotThrow(() => new Function(script));
+});
+
 test("context verification UI exposes source status data quality and sync diagnostics", () => {
   const html = withContextUi("<!doctype html><html><body><div id=\"app\"></div></body></html>");
-  assert.match(html, /Data Quality/);
   assert.match(html, /sourceStatus/);
-  assert.match(html, /nflverse/);
-  assert.match(html, /nfldata/);
-  assert.match(html, /Open-Meteo/);
   assert.match(html, /matchedGames/);
   assert.match(html, /unmatchedGames/);
   assert.match(html, /teamsWithAdvancedMetrics/);
@@ -84,13 +105,15 @@ test("admin PIN UI makes checking success and failure visible", () => {
   assert.match(html, /Checking Final Scores/);
 });
 
-test("v0.13.1 health advertises context diagnostics provenance and separation from predictions", () => {
+test("v0.13.2 health advertises hardened full-field Context rendering and prediction separation", () => {
   const body = contextHealth({ ok: true });
-  assert.equal(APP_VERSION, "0.13.1");
+  assert.equal(APP_VERSION, "0.13.2");
   assert.equal(body.version, APP_VERSION);
   assert.equal(body.contextIntelligence, true);
   assert.equal(body.contextAffectsPredictions, false);
   assert.equal(body.contextDiagnostics, true);
   assert.equal(body.contextProvenance, true);
+  assert.equal(body.contextRenderingHardened, true);
+  assert.equal(body.contextFullCapturedFields, true);
   assert.deepEqual(body.contextSources, ["nfldata", "nflverse", "open-meteo"]);
 });
