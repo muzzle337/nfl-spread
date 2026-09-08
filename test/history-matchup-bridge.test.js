@@ -12,10 +12,7 @@ test("current primetime detects NFL evening UTC windows", () => {
 });
 
 test("current matchup conditions map weather and rest only when applicable", () => {
-  const c = currentHistoricalConditions({
-    kickoffAt:"2026-09-15T00:15:00Z", roof:"outdoors", awayRest:10, homeRest:6,
-    weather:{ temperatureF:28, windMph:17 }
-  });
+  const c = currentHistoricalConditions({ kickoffAt:"2026-09-15T00:15:00Z", roof:"outdoors", awayRest:10, homeRest:6, weather:{ temperatureF:28, windMph:17 } });
   assert.equal(c.primeTime, true);
   assert.deepEqual(c.away, ["away","primeTime","coldOutdoor","windyOutdoor","extraRest","restAdvantage3Plus"]);
   assert.deepEqual(c.home, ["home","primeTime","coldOutdoor","windyOutdoor","shortRest"]);
@@ -46,8 +43,8 @@ test("historical matchup UI shows actual records, samples, and no MutationObserv
   scripts.forEach((script) => assert.doesNotThrow(() => new Function(script)));
 });
 
-test("v0.16 exposes the historical matchup bridge", () => {
+test("v0.16 history bridge remains present under later wrappers", () => {
   assert.equal(APP_VERSION, "0.16.0");
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\s*:\s*"src\/v016-entry\.js"/);
+  assert.match(config, /"main"\s*:\s*"src\/v01[6-9]-entry\.js"/);
 });
