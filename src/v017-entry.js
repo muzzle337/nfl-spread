@@ -3,6 +3,7 @@ import { isAdminSessionAuthorized } from "./admin-session.js";
 import { resolveDashboardWeek } from "./dashboard-data.js";
 import { weeklyGameOutlooks, saveWeeklyPick, poolSeasonSummary } from "./weekly-picks.js";
 import { withGameOutlookPicksUi } from "./game-outlook-picks-ui.js";
+import { withPicksPolishUi } from "./picks-polish-ui.js";
 
 export const APP_VERSION="0.17.0";
 function json(body,status=200,headers={}){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}})}
@@ -37,7 +38,7 @@ async function upgrade(request,response){
   return json({...b,version:APP_VERSION,gameOutlook:true,weeklyPoolPicks:true,weeklyPoolGrading:true,imessageExport:true,publicPickPercentage:false,weeklyPoolPercentageBasis:'consensus no-vig market win probability',gameOutlookAffectsPredictions:false},response.status,response.headers);
  }
  if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
-  if(!response.ok)return response;return new Response(withGameOutlookPicksUi(replaceVersions(await response.text())),{status:response.status,headers:response.headers});
+  if(!response.ok)return response;const body=withGameOutlookPicksUi(replaceVersions(await response.text()));return new Response(withPicksPolishUi(body),{status:response.status,headers:response.headers});
  }
  if(request.method==='GET'&&url.pathname==='/sw.js'){
   if(!response.ok)return response;return new Response(replaceVersions(await response.text()),{status:response.status,headers:response.headers});
