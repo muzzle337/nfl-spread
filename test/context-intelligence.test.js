@@ -105,15 +105,15 @@ test("admin PIN UI makes checking success and failure visible", () => {
   assert.match(html, /Checking Final Scores/);
 });
 
-test("v0.13.2 health advertises hardened full-field Context rendering and prediction separation", () => {
+test("v0.13.3 health advertises mobile cache recovery while preserving Context backend", () => {
   const body = contextHealth({ ok: true });
-  assert.equal(APP_VERSION, "0.13.2");
+  assert.equal(APP_VERSION, "0.13.3");
   assert.equal(body.version, APP_VERSION);
   assert.equal(body.contextIntelligence, true);
   assert.equal(body.contextAffectsPredictions, false);
   assert.equal(body.contextDiagnostics, true);
   assert.equal(body.contextProvenance, true);
-  assert.equal(body.contextRenderingHardened, true);
-  assert.equal(body.contextFullCapturedFields, true);
+  assert.equal(body.contextUiTemporarilyDisabled, true);
+  assert.equal(body.mobileCacheRecovery, true);
   assert.deepEqual(body.contextSources, ["nfldata", "nflverse", "open-meteo"]);
 });
