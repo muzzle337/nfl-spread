@@ -49,8 +49,6 @@ export function isPrimeTimeGame(row) {
   const hour = Number(match[1]);
   const minute = Number(match[2]);
   const minutes = hour * 60 + minute;
-  // nflverse schedule times are Eastern Time. This captures the standard national
-  // evening window while excluding London/morning and normal 1pm/4pm games.
   return minutes >= 19 * 60;
 }
 
@@ -122,32 +120,6 @@ function upsertStatement(db, g) {
     g.location, g.stadium, g.roof, g.surface, g.tempF, g.windMph,
     g.awayRest, g.homeRest, g.awayCoach, g.homeCoach, g.divGame, g.primeTime
   );
-}
-
-export async function importHistoricalGames(db, { startSeason = 2015, endSeason = 2025, fetchImpl = fetch } = {}) {
-  if (!db) throw new Error("Database is not bound");
-  if (!Number.isInteger(startSeason) || !Number.isInteger(endSeason) || startSeason > endSeason) throw new Error("Invalid season range");
-  if (endSeason - startSeason > 20) throw new Error("Historical import is limited to 21 seasons per request");
-  await ensureHistorySchema(db);
-  const sourceRows = await fetchScheduleRows(fetchImpl);
-  const games = sourceRows.map(normalizeHistoricalGame).filter((g) => validHistoricalGame(g, startSeason, endSeason));
-  let imported = 0;
-  const batchSize = 60;
-  for (let i = 0; i < games.length; i += batchSize) {
-    const statements = games.slice(i, i + batchSize).map((g) => upsertStatement(db, g));
-    await db.batch(statements);
-    imported += statements.length;
-  }
-  await db.prepare(`INSERT INTO historical_import_runs(start_season, end_season, games_imported, source_rows) VALUES (?, ?, ?, ?)`)
-    .bind(startSeason, endSeason, imported, sourceRows.length).run();
-  return {
-    startSeason,
-    endSeason,
-    gamesImported: imported,
-    sourceRows: sourceRows.length,
-    source: "nflverse",
-    fields: ["coach", "spread", "score", "rest", "roof", "surface", "temperature", "wind", "stadium", "kickoff", "primetime"]
-  };
 }
 
 function sideForCoach(row, coach) {
@@ -227,28 +199,100 @@ export function coachIndicatorSummary(rows, coach) {
   };
 }
 
+function normalizedAsHistoryRow(g) {
+  return {
+    season:g.season, week:g.week,
+    away_team:g.awayTeam, home_team:g.homeTeam,
+    away_score:g.awayScore, home_score:g.homeScore,
+    spread_line:g.spreadLine, roof:g.roof, temp_f:g.tempF, wind_mph:g.windMph,
+    away_rest:g.awayRest, home_rest:g.homeRest,
+    away_coach:g.awayCoach, home_coach:g.homeCoach,
+    div_game:g.divGame, prime_time:g.primeTime
+  };
+}
+
+async function putCoachSummary(db, coach, startSeason, endSeason, summary) {
+  await db.prepare(`INSERT INTO historical_coach_summaries(coach,start_season,end_season,summary_json,rebuilt_at)
+    VALUES(?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(coach,start_season,end_season) DO UPDATE SET summary_json=excluded.summary_json,rebuilt_at=CURRENT_TIMESTAMP`)
+    .bind(coach,startSeason,endSeason,JSON.stringify(summary)).run();
+}
+
+export async function rebuildHistoricalCoachSummaries(db, games, { startSeason = 2015, endSeason = 2025 } = {}) {
+  await ensureHistorySchema(db);
+  const rows = (games || []).map(normalizedAsHistoryRow);
+  const coaches = [...new Set((games || []).flatMap((g) => [g.awayCoach,g.homeCoach]).filter(Boolean))].sort();
+  await db.prepare(`DELETE FROM historical_coach_summaries WHERE start_season=? AND end_season=?`).bind(startSeason,endSeason).run();
+  const statements = coaches.map((coach) => {
+    const coachRows = rows.filter((r) => r.away_coach === coach || r.home_coach === coach);
+    const summary = coachIndicatorSummary(coachRows,coach);
+    return db.prepare(`INSERT INTO historical_coach_summaries(coach,start_season,end_season,summary_json,rebuilt_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)`)
+      .bind(coach,startSeason,endSeason,JSON.stringify(summary));
+  });
+  for (let i=0;i<statements.length;i+=50) await db.batch(statements.slice(i,i+50));
+  return { coachesCached:coaches.length };
+}
+
+export async function importHistoricalGames(db, { startSeason = 2015, endSeason = 2025, fetchImpl = fetch } = {}) {
+  if (!db) throw new Error("Database is not bound");
+  if (!Number.isInteger(startSeason) || !Number.isInteger(endSeason) || startSeason > endSeason) throw new Error("Invalid season range");
+  if (endSeason - startSeason > 20) throw new Error("Historical import is limited to 21 seasons per request");
+  await ensureHistorySchema(db);
+  const sourceRows = await fetchScheduleRows(fetchImpl);
+  const games = sourceRows.map(normalizeHistoricalGame).filter((g) => validHistoricalGame(g, startSeason, endSeason));
+  let imported = 0;
+  const batchSize = 60;
+  for (let i = 0; i < games.length; i += batchSize) {
+    const statements = games.slice(i, i + batchSize).map((g) => upsertStatement(db, g));
+    await db.batch(statements);
+    imported += statements.length;
+  }
+  const cache = await rebuildHistoricalCoachSummaries(db,games,{startSeason,endSeason});
+  await db.prepare(`DELETE FROM weekly_outlook_cache`).run();
+  await db.prepare(`INSERT INTO historical_import_runs(start_season, end_season, games_imported, source_rows) VALUES (?, ?, ?, ?)`)
+    .bind(startSeason, endSeason, imported, sourceRows.length).run();
+  return {
+    startSeason,
+    endSeason,
+    gamesImported: imported,
+    sourceRows: sourceRows.length,
+    coachesCached: cache.coachesCached,
+    weeklyOutlookCacheInvalidated: true,
+    source: "nflverse",
+    fields: ["coach", "spread", "score", "rest", "roof", "surface", "temperature", "wind", "stadium", "kickoff", "primetime"]
+  };
+}
+
 export async function historicalCoachIndicators(db, coach, { startSeason = 2015, endSeason = 2025 } = {}) {
   if (!db) throw new Error("Database is not bound");
   if (!coach) throw new Error("coach is required");
   await ensureHistorySchema(db);
+  const cached = await db.prepare(`SELECT summary_json,rebuilt_at FROM historical_coach_summaries WHERE coach=? AND start_season=? AND end_season=? LIMIT 1`)
+    .bind(coach,startSeason,endSeason).first();
+  if (cached?.summary_json) {
+    try { return { ...JSON.parse(cached.summary_json), cache:{ hit:true, rebuiltAt:cached.rebuilt_at } }; } catch {}
+  }
   const result = await db.prepare(`
     SELECT * FROM historical_games
     WHERE season BETWEEN ? AND ? AND (away_coach = ? OR home_coach = ?)
     ORDER BY season, week
   `).bind(startSeason, endSeason, coach, coach).all();
-  return coachIndicatorSummary(result.results ?? [], coach);
+  const summary = coachIndicatorSummary(result.results ?? [], coach);
+  await putCoachSummary(db,coach,startSeason,endSeason,summary);
+  return { ...summary, cache:{ hit:false, rebuiltAt:null } };
 }
 
 export async function historyStatus(db) {
   if (!db) throw new Error("Database is not bound");
   await ensureHistorySchema(db);
   const totals = await db.prepare(`SELECT COUNT(*) games, MIN(season) min_season, MAX(season) max_season FROM historical_games`).first();
-  const coaches = await db.prepare(`SELECT COUNT(DISTINCT coach) coaches FROM (SELECT away_coach coach FROM historical_games WHERE away_coach IS NOT NULL UNION SELECT home_coach coach FROM historical_games WHERE home_coach IS NOT NULL)`).first();
+  const summaries = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM historical_coach_summaries`).first();
   const latest = await db.prepare(`SELECT * FROM historical_import_runs ORDER BY id DESC LIMIT 1`).first();
   return {
     games: Number(totals?.games ?? 0),
     seasons: totals?.games ? { from: Number(totals.min_season), to: Number(totals.max_season) } : null,
-    coaches: Number(coaches?.coaches ?? 0),
+    coachSummaries: Number(summaries?.summaries ?? 0),
+    summariesRebuiltAt: summaries?.rebuilt_at ?? null,
     latestImport: latest ?? null
   };
 }

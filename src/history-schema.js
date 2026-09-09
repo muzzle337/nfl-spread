@@ -43,6 +43,21 @@ export async function ensureHistorySchema(db) {
       source_rows INTEGER NOT NULL,
       source TEXT NOT NULL DEFAULT 'nflverse',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS historical_coach_summaries (
+      coach TEXT NOT NULL,
+      start_season INTEGER NOT NULL,
+      end_season INTEGER NOT NULL,
+      summary_json TEXT NOT NULL,
+      rebuilt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(coach,start_season,end_season)
+    )`,
+    `CREATE TABLE IF NOT EXISTS weekly_outlook_cache (
+      season INTEGER NOT NULL,
+      week INTEGER NOT NULL,
+      payload_json TEXT NOT NULL,
+      built_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(season,week)
     )`
   ];
   for (const sql of statements) await db.prepare(sql).run();
