@@ -68,5 +68,9 @@ export default{
     if(env.DB&&invalidatesWeeklyOutlook(request,url,response)){try{await invalidateWeeklyOutlookCache(env.DB);}catch{}}
     return upgrade(request,response);
   },
-  scheduled(controller,env,ctx){return app.scheduled(controller,env,ctx);}
+  async scheduled(controller,env,ctx){
+    const result=await app.scheduled(controller,env,ctx);
+    if(env.DB){try{await invalidateWeeklyOutlookCache(env.DB);}catch{}}
+    return result;
+  }
 };
