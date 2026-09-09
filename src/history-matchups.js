@@ -1,4 +1,4 @@
-import { historicalCoachIndicators } from "./history.js";
+import { ensureHistorySchema } from "./history-schema.js";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -15,8 +15,6 @@ export function isCurrentPrimeTime(kickoffAt) {
   const d = new Date(kickoffAt);
   if (Number.isNaN(d.getTime())) return false;
   const h = d.getUTCHours();
-  // During the NFL season, standard US primetime windows start around 23:00–01:30 UTC.
-  // This intentionally excludes normal 17:00/20:00 UTC Sunday windows and morning international games.
   return h >= 23 || h <= 2;
 }
 
@@ -42,14 +40,7 @@ export function currentHistoricalConditions(game) {
   if (awayRest !== null && homeRest !== null && awayRest - homeRest >= 3) away.push("restAdvantage3Plus");
   if (awayRest !== null && homeRest !== null && homeRest - awayRest >= 3) home.push("restAdvantage3Plus");
 
-  return {
-    primeTime,
-    outdoor,
-    temperatureF: temp,
-    windMph: wind,
-    away,
-    home
-  };
+  return { primeTime, outdoor, temperatureF: temp, windMph: wind, away, home };
 }
 
 const LABELS = Object.freeze({
@@ -67,13 +58,7 @@ const LABELS = Object.freeze({
 function splitPayload(summary, key) {
   const split = summary?.indicators?.[key];
   if (!split) return null;
-  return {
-    key,
-    label: LABELS[key] || key,
-    games: Number(split.games || 0),
-    record: split.record,
-    spreadRecord: split.spreadRecord
-  };
+  return { key, label: LABELS[key] || key, games: Number(split.games || 0), record: split.record, spreadRecord: split.spreadRecord };
 }
 
 export function notableHistoricalSplit(split) {
@@ -91,16 +76,30 @@ function sidePayload(code, coach, summary, keys) {
     timeframe: summary?.timeframe || null,
     overall: summary?.overall || null,
     applicable: splits,
-    notable: splits.filter(notableHistoricalSplit)
+    notable: splits.filter(notableHistoricalSplit),
+    cacheAvailable: Boolean(summary)
   };
 }
 
-export async function historicalIndicatorsForCurrentGame(db, game, range = { startSeason: 2015, endSeason: 2025 }) {
+async function loadSummaryMap(db, range) {
+  await ensureHistorySchema(db);
+  const startSeason = Number(range?.startSeason ?? 2015);
+  const endSeason = Number(range?.endSeason ?? 2025);
+  const r = await db.prepare(`SELECT coach,summary_json,rebuilt_at FROM historical_coach_summaries WHERE start_season=? AND end_season=?`)
+    .bind(startSeason, endSeason).all();
+  const map = new Map();
+  for (const row of r.results || []) {
+    try {
+      map.set(row.coach, { ...JSON.parse(row.summary_json), cache:{ hit:true, rebuiltAt:row.rebuilt_at } });
+    } catch {}
+  }
+  return map;
+}
+
+function buildCurrentGame(game, summaries) {
   const conditions = currentHistoricalConditions(game);
-  const [awaySummary, homeSummary] = await Promise.all([
-    game.awayCoach ? historicalCoachIndicators(db, game.awayCoach, range) : Promise.resolve(null),
-    game.homeCoach ? historicalCoachIndicators(db, game.homeCoach, range) : Promise.resolve(null)
-  ]);
+  const awaySummary = game.awayCoach ? summaries.get(game.awayCoach) || null : null;
+  const homeSummary = game.homeCoach ? summaries.get(game.homeCoach) || null : null;
   const away = sidePayload(game.awayCode, game.awayCoach, awaySummary, conditions.away);
   const home = sidePayload(game.homeCode, game.homeCoach, homeSummary, conditions.home);
   const notableCount = away.notable.length + home.notable.length;
@@ -113,12 +112,17 @@ export async function historicalIndicatorsForCurrentGame(db, game, range = { sta
     away,
     home,
     notableCount,
-    hasNotableHistory: notableCount > 0
+    hasNotableHistory: notableCount > 0,
+    historyCacheReady: away.cacheAvailable || home.cacheAvailable
   };
 }
 
+export async function historicalIndicatorsForCurrentGame(db, game, range = { startSeason: 2015, endSeason: 2025 }) {
+  const summaries = await loadSummaryMap(db, range);
+  return buildCurrentGame(game, summaries);
+}
+
 export async function historicalIndicatorsForWeek(db, games, range = { startSeason: 2015, endSeason: 2025 }) {
-  const out = [];
-  for (const game of games || []) out.push(await historicalIndicatorsForCurrentGame(db, game, range));
-  return out;
+  const summaries = await loadSummaryMap(db, range);
+  return (games || []).map((game) => buildCurrentGame(game, summaries));
 }

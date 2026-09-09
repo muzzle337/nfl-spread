@@ -4,8 +4,8 @@ import { withCompleteGameDetailUi } from '../src/complete-game-detail-ui.js';
 import { withV019PolishUi } from '../src/v019-polish-ui.js';
 import { APP_VERSION } from '../src/v019-entry.js';
 
-test('v0.19 exposes all-game history and complete game detail',()=>{
-  assert.equal(APP_VERSION,'0.19.0');
+test('v0.19.x exposes all-game history and complete game detail',()=>{
+  assert.equal(APP_VERSION,'0.19.1');
   const base='<!doctype html><html><head></head><body><div class="app-shell"><div class="content"></div></div></body></html>';
   const html=withV019PolishUi(withCompleteGameDetailUi(base));
   assert.match(html,/Historical Indicators — Every Game/);
@@ -23,10 +23,10 @@ test('v0.19 exposes all-game history and complete game detail',()=>{
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('v0.19 production entry is configured',async()=>{
+test('v0.19.1 production entry is configured',async()=>{
   const fs=await import('node:fs/promises');
   const wrangler=await fs.readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(await fs.readFile(new URL('../package.json',import.meta.url),'utf8'));
   assert.match(wrangler,/src\/v019-entry\.js/);
-  assert.equal(pkg.version,'0.19.0');
+  assert.equal(pkg.version,'0.19.1');
 });
