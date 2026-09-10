@@ -46,5 +46,5 @@ test("historical matchup UI shows actual records, samples, and no MutationObserv
 test("v0.16 history bridge remains present under later wrappers", () => {
   assert.equal(APP_VERSION, "0.16.0");
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\s*:\s*"src\/v0(?:1[6-9]|20)-entry\.js"/);
+  assert.match(config, /"main"\s*:\s*"src\/v0(?:1[6-9]|2[0-9])-entry\.js"/);
 });
