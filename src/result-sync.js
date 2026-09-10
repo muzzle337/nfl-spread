@@ -4,7 +4,7 @@ import { ingestCompletedScores } from "./results.js";
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-export const FINAL_GRACE_HOURS = 6;
+export const FINAL_GRACE_HOURS = 4;
 export const SCORE_LOOKBACK_DAYS = 3;
 
 function asDate(value) {
