@@ -23,10 +23,8 @@ test('v0.19.x exposes all-game history and complete game detail',()=>{
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('v0.19.1 production entry is configured',async()=>{
+test('v0.19.1 remains covered beneath later production wrappers',async()=>{
   const fs=await import('node:fs/promises');
-  const wrangler=await fs.readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8');
-  const pkg=JSON.parse(await fs.readFile(new URL('../package.json',import.meta.url),'utf8'));
-  assert.match(wrangler,/src\/v019-entry\.js/);
-  assert.equal(pkg.version,'0.19.1');
+  const v020=await fs.readFile(new URL('../src/v020-entry.js',import.meta.url),'utf8');
+  assert.match(v020,/import app from ['"]\.\/v019-entry\.js['"]/);
 });
