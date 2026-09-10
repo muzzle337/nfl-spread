@@ -52,15 +52,21 @@ test('Opportunity Edge Focus UI is mobile-safe, non-polling and compiles',()=>{
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('v0.20 production entry preserves D1 read-safety contract',async()=>{
-  assert.equal(APP_VERSION,'0.20.0');
+test('v0.20.1 production entry preserves D1 read-safety and fresh final-score contract',async()=>{
+  assert.equal(APP_VERSION,'0.20.1');
   const fs=await import('node:fs/promises');
   const wrangler=await fs.readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(await fs.readFile(new URL('../package.json',import.meta.url),'utf8'));
   const route=readFileSync(new URL('../src/v020-entry.js',import.meta.url),'utf8');
   const engine=readFileSync(new URL('../src/opportunity-focus.js',import.meta.url),'utf8');
+  const resultSync=readFileSync(new URL('../src/result-sync.js',import.meta.url),'utf8');
   assert.match(wrangler,/src\/v020-entry\.js/);
-  assert.equal(pkg.version,'0.20.0');
+  assert.equal(pkg.version,'0.20.1');
   assert.match(route,/rawHistoricalGames:false/);
   assert.doesNotMatch(route+engine,/historical_games/);
+  assert.match(route,/SPREAD_REFRESH_CRON/);
+  assert.match(route,/syncResultsIfDue/);
+  assert.match(route,/invalidateWeeklyOutlookCache/);
+  assert.match(route,/scheduled_hourly/);
+  assert.match(resultSync,/FINAL_GRACE_HOURS = 4/);
 });
