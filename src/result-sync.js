@@ -22,6 +22,19 @@ function finalized(row) {
     && row?.home_score !== undefined;
 }
 
+function publicResultRow(row) {
+  return {
+    id: row.id,
+    awayTeam: row.away_team,
+    homeTeam: row.home_team,
+    kickoffAt: row.kickoff_at,
+    status: row.status,
+    awayScore: row.away_score ?? null,
+    homeScore: row.home_score ?? null,
+    final: finalized(row)
+  };
+}
+
 export function partitionMissingFinals(rows, now = new Date(), lookbackDays = SCORE_LOOKBACK_DAYS) {
   const nowDate = asDate(now);
   const oldestEligibleMs = nowDate.getTime() - lookbackDays * DAY_MS;
@@ -88,15 +101,9 @@ export async function resultsIntegrity(db, now = new Date()) {
     eligibleForAutoSyncCount: eligibleForAutoSync.length,
     staleMissingCount: staleMissing.length,
     missing: missing.map((row) => ({
-      id: row.id,
+      ...publicResultRow(row),
       season: Number(row.season),
       week: Number(row.week),
-      awayTeam: row.away_team,
-      homeTeam: row.home_team,
-      kickoffAt: row.kickoff_at,
-      status: row.status,
-      awayScore: row.away_score ?? null,
-      homeScore: row.home_score ?? null,
       autoSyncEligible: eligibleForAutoSync.some((candidate) => candidate.id === row.id)
     }))
   };
@@ -134,15 +141,7 @@ export async function weekResultsStatus(db, season, week, now = new Date()) {
     if (Number.isFinite(kickoffMs) && kickoffMs > graceCutoffMs) {
       awaitingCompletion += 1;
     } else {
-      missing.push({
-        id: row.id,
-        awayTeam: row.away_team,
-        homeTeam: row.home_team,
-        kickoffAt: row.kickoff_at,
-        status: row.status,
-        awayScore: row.away_score ?? null,
-        homeScore: row.home_score ?? null
-      });
+      missing.push(publicResultRow(row));
     }
   }
 
@@ -154,6 +153,7 @@ export async function weekResultsStatus(db, season, week, now = new Date()) {
     awaitingCompletion,
     missingFinals: missing.length,
     weekComplete: rows.length > 0 && completedGames === rows.length,
+    games: rows.map(publicResultRow),
     missing
   };
 }
