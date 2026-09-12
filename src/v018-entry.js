@@ -48,7 +48,7 @@ async function upgrade(request,response){
   const url=new URL(request.url);
   if(url.pathname==='/api/health'){
     const body=await response.json().catch(()=>null);if(!body||typeof body!=='object')return response;
-    return json({...body,version:APP_VERSION,stabilityAudit:true,viewIsolation:true,uiDedupeGuard:true,contractDiagnostics:true,browserRegressionGate:true,d1ReadHotfix:true,picksContinuousPolling:false,historicalSummaryCache:true,weeklyOutlookCache:true,heavyDiagnosticsDisabled:true,d1UsageGuardrails:true},response.status,response.headers);
+    return json({...body,version:APP_VERSION,stabilityAudit:true,viewIsolation:true,uiDedupeGuard:true,contractDiagnostics:true,browserRegressionGate:true,d1ReadHotfix:true,picksContinuousPolling:false,historicalSummaryCache:true,weeklyOutlookCache:true,heavyDiagnosticsDisabled:true,d1UsageGuardrails:true,scheduledCacheInvalidation:'change_driven_only'},response.status,response.headers);
   }
   if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
     if(!response.ok)return response;return new Response(withStabilityUi(replaceVersions(await response.text())),{status:response.status,headers:response.headers});
@@ -68,9 +68,7 @@ export default{
     if(env.DB&&invalidatesWeeklyOutlook(request,url,response)){try{await invalidateWeeklyOutlookCache(env.DB);}catch{}}
     return upgrade(request,response);
   },
-  async scheduled(controller,env,ctx){
-    const result=await app.scheduled(controller,env,ctx);
-    if(env.DB){try{await invalidateWeeklyOutlookCache(env.DB);}catch{}}
-    return result;
+  scheduled(controller,env,ctx){
+    return app.scheduled(controller,env,ctx);
   }
 };
