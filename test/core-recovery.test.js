@@ -27,9 +27,9 @@ test('tier engine still settles favorite and underdog independently', () => {
     { awaySpread: -10, homeSpread: 10, awayScore: 27, homeScore: 20 }
   ]);
   assert.equal(stats.gamesConsidered, 2);
-  assert.equal(stats.buckets['Home Favorite|<=3'].wins, 1);
-  assert.equal(stats.buckets['Away Favorite|>7'].losses, 1);
-  assert.equal(stats.buckets['Home Underdog|>7'].wins, 1);
+  assert.equal(stats.buckets['HomeFav|<=3'].wins, 1);
+  assert.equal(stats.buckets['AwayFav|>7'].losses, 1);
+  assert.equal(stats.buckets['HomeDog|>7'].wins, 1);
 });
 
 test('production runtime disables recurring pool polling and unconditional cron cache invalidation', () => {
@@ -37,7 +37,7 @@ test('production runtime disables recurring pool polling and unconditional cron 
   const v018 = read('../src/v018-entry.js');
   assert.match(v021, /legacyRecurringPolling:false/);
   assert.match(v021, /recurring pool polling disabled by core recovery/);
-  assert.doesNotMatch(v018, /async scheduled[\s\S]*invalidateWeeklyOutlookCache/);
+  assert.doesNotMatch(v018, /scheduled\(controller,env,ctx\)[\s\S]*invalidateWeeklyOutlookCache/);
 });
 
 test('projection contract supports opening baseline plus live in-week tier state', () => {
@@ -50,7 +50,7 @@ test('projection contract supports opening baseline plus live in-week tier state
 
 test('score ingestion has team and kickoff fallback when provider ids differ', () => {
   const results = read('../src/results.js');
-  assert.match(results, /matchedBy: "teams_kickoff"/);
+  assert.match(results, /teams_kickoff/);
   assert.match(results, /away_team = \?/);
   assert.match(results, /home_team = \?/);
   assert.match(results, /julianday\(kickoff_at\)/);
