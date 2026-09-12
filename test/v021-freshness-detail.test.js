@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs';
 import { withV021Ui } from '../src/v021-ui.js';
 import { APP_VERSION } from '../src/v021-entry.js';
 
-test('v0.21 is the production entry and package version',()=>{
+test('v0.21.1 is the production entry and package version',()=>{
   const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
-  assert.equal(APP_VERSION,'0.21.0');
-  assert.equal(pkg.version,'0.21.0');
+  assert.equal(APP_VERSION,'0.21.1');
+  assert.equal(pkg.version,'0.21.1');
   assert.match(wrangler,/src\/v021-entry\.js/);
 });
 

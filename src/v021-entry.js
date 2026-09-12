@@ -2,9 +2,15 @@ import app from './v020-entry.js';
 import { dataFreshness } from './data-freshness.js';
 import { withV021Ui } from './v021-ui.js';
 
-export const APP_VERSION='0.21.0';
+export const APP_VERSION='0.21.1';
 function json(body,status=200,headers={}){return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store',...headers}})}
-function replaceVersions(body){return String(body).split('0.12.0').join(APP_VERSION).split('0.13.0').join(APP_VERSION).split('0.13.1').join(APP_VERSION).split('0.13.2').join(APP_VERSION).split('0.13.3').join(APP_VERSION).split('0.14.0').join(APP_VERSION).split('0.15.0').join(APP_VERSION).split('0.16.0').join(APP_VERSION).split('0.17.0').join(APP_VERSION).split('0.17.1').join(APP_VERSION).split('0.18.0').join(APP_VERSION).split('0.18.1').join(APP_VERSION).split('0.18.2').join(APP_VERSION).split('0.19.0').join(APP_VERSION).split('0.19.1').join(APP_VERSION).split('0.20.0').join(APP_VERSION).split('0.20.1').join(APP_VERSION)}
+function replaceVersions(body){return String(body).split('0.12.0').join(APP_VERSION).split('0.13.0').join(APP_VERSION).split('0.13.1').join(APP_VERSION).split('0.13.2').join(APP_VERSION).split('0.13.3').join(APP_VERSION).split('0.14.0').join(APP_VERSION).split('0.15.0').join(APP_VERSION).split('0.16.0').join(APP_VERSION).split('0.17.0').join(APP_VERSION).split('0.17.1').join(APP_VERSION).split('0.18.0').join(APP_VERSION).split('0.18.1').join(APP_VERSION).split('0.18.2').join(APP_VERSION).split('0.19.0').join(APP_VERSION).split('0.19.1').join(APP_VERSION).split('0.20.0').join(APP_VERSION).split('0.20.1').join(APP_VERSION).split('0.21.0').join(APP_VERSION)}
+
+function hardenLegacyRuntime(body){
+ return String(body)
+  .split("setInterval(function(){if(!S.picksMode)load()},120000);").join("/* recurring pool polling disabled by core recovery */")
+  .replace('</head>','<style>[data-cg19-board]{display:none!important}</style></head>');
+}
 
 async function freshnessRoute(request,env,url){
  if(url.pathname!=='/api/data/freshness')return null;
@@ -19,10 +25,12 @@ async function upgrade(request,response){
  const url=new URL(request.url);
  if(url.pathname==='/api/health'){
   const b=await response.json().catch(()=>null);if(!b||typeof b!=='object')return response;
-  return json({...b,version:APP_VERSION,canonicalGameDetail:true,dataFreshnessContract:true,staleDataVisible:true,toolsViewIsolated:true,normalUiRawHistoryReads:false},response.status,response.headers);
+  return json({...b,version:APP_VERSION,canonicalGameDetail:true,dataFreshnessContract:true,staleDataVisible:true,toolsViewIsolated:true,normalUiRawHistoryReads:false,legacyRecurringPolling:false,legacyHistoricalBoardSuppressed:true,coreRecovery:true},response.status,response.headers);
  }
  if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
-  if(!response.ok)return response;return new Response(withV021Ui(replaceVersions(await response.text())),{status:response.status,headers:response.headers});
+  if(!response.ok)return response;
+  const body=hardenLegacyRuntime(replaceVersions(await response.text()));
+  return new Response(withV021Ui(body),{status:response.status,headers:response.headers});
  }
  if(request.method==='GET'&&url.pathname==='/sw.js'){
   if(!response.ok)return response;return new Response(replaceVersions(await response.text()),{status:response.status,headers:response.headers});

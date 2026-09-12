@@ -14,6 +14,7 @@ test("finalScoreUpdate accepts only completed games with valid non-negative inte
     id: "g1",
     awayTeam: "Away",
     homeTeam: "Home",
+    commenceTime: null,
     awayScore: 24,
     homeScore: 20
   });

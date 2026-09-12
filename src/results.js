@@ -16,6 +16,7 @@ export function finalScoreUpdate(game) {
     id: game.id,
     awayTeam: game.awayTeam,
     homeTeam: game.homeTeam,
+    commenceTime: game.commenceTime ?? null,
     awayScore,
     homeScore
   };
@@ -38,6 +39,43 @@ async function latestConsensusAwaySpread(db, gameId) {
   return median((result.results ?? []).map((row) => row.away_spread));
 }
 
+async function storedGameForScore(db, update) {
+  if (update.id) {
+    const exact = await db.prepare(`
+      SELECT id, status, away_score, home_score, closing_away_spread, kickoff_at
+      FROM games
+      WHERE id = ?
+      LIMIT 1
+    `).bind(update.id).first();
+    if (exact) return { row: exact, matchedBy: "provider_id" };
+  }
+
+  if (!update.awayTeam || !update.homeTeam) return { row: null, matchedBy: null };
+
+  const kickoff = update.commenceTime ? new Date(update.commenceTime) : null;
+  const kickoffIso = kickoff && !Number.isNaN(kickoff.getTime()) ? kickoff.toISOString() : null;
+
+  const fallback = kickoffIso
+    ? await db.prepare(`
+        SELECT id, status, away_score, home_score, closing_away_spread, kickoff_at
+        FROM games
+        WHERE away_team = ?
+          AND home_team = ?
+          AND ABS((julianday(kickoff_at) - julianday(?)) * 24.0) <= 12
+        ORDER BY ABS((julianday(kickoff_at) - julianday(?)) * 24.0) ASC
+        LIMIT 1
+      `).bind(update.awayTeam, update.homeTeam, kickoffIso, kickoffIso).first()
+    : await db.prepare(`
+        SELECT id, status, away_score, home_score, closing_away_spread, kickoff_at
+        FROM games
+        WHERE away_team = ? AND home_team = ?
+        ORDER BY julianday(kickoff_at) DESC
+        LIMIT 1
+      `).bind(update.awayTeam, update.homeTeam).first();
+
+  return { row: fallback ?? null, matchedBy: fallback ? "teams_kickoff" : null };
+}
+
 export async function ingestCompletedScores(db, scoreGames) {
   if (!db) throw new Error("Database is not bound");
 
@@ -47,6 +85,8 @@ export async function ingestCompletedScores(db, scoreGames) {
   let gamesNotStored = 0;
   let gamesInvalid = 0;
   let nonFinalIgnored = 0;
+  let matchedByProviderId = 0;
+  let matchedByTeamsKickoff = 0;
 
   for (const game of Array.isArray(scoreGames) ? scoreGames : []) {
     if (!game?.completed) {
@@ -61,17 +101,16 @@ export async function ingestCompletedScores(db, scoreGames) {
       continue;
     }
 
-    const existing = await db.prepare(`
-      SELECT id, status, away_score, home_score, closing_away_spread
-      FROM games
-      WHERE id = ?
-      LIMIT 1
-    `).bind(update.id).first();
+    const match = await storedGameForScore(db, update);
+    const existing = match.row;
 
     if (!existing) {
       gamesNotStored += 1;
       continue;
     }
+
+    if (match.matchedBy === "provider_id") matchedByProviderId += 1;
+    if (match.matchedBy === "teams_kickoff") matchedByTeamsKickoff += 1;
 
     const sameScores = Number(existing.away_score) === update.awayScore
       && Number(existing.home_score) === update.homeScore;
@@ -82,7 +121,7 @@ export async function ingestCompletedScores(db, scoreGames) {
       continue;
     }
 
-    const closingAwaySpread = existing.closing_away_spread ?? await latestConsensusAwaySpread(db, update.id);
+    const closingAwaySpread = existing.closing_away_spread ?? await latestConsensusAwaySpread(db, existing.id);
 
     await db.prepare(`
       UPDATE games
@@ -97,7 +136,7 @@ export async function ingestCompletedScores(db, scoreGames) {
       update.awayScore,
       update.homeScore,
       closingAwaySpread,
-      update.id
+      existing.id
     ).run();
 
     gamesUpdated += 1;
@@ -110,6 +149,8 @@ export async function ingestCompletedScores(db, scoreGames) {
     gamesUnchanged,
     gamesNotStored,
     gamesInvalid,
-    nonFinalIgnored
+    nonFinalIgnored,
+    matchedByProviderId,
+    matchedByTeamsKickoff
   };
 }
