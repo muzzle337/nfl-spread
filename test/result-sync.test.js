@@ -94,7 +94,7 @@ const scheduledGame = ({
   closing_away_spread: null
 });
 
-test("3-day partition keeps recent missing finals eligible and marks older gaps for attention", () => {
+test("3-day partition keeps recent missing finals eligible and marks older gaps for repair", () => {
   const now = new Date("2026-09-15T12:15:00Z");
   const recent = { id: "recent", kickoff_at: "2026-09-13T20:25:00Z" };
   const stale = { id: "stale", kickoff_at: "2026-09-10T00:15:00Z" };
@@ -165,29 +165,66 @@ test("guarded sync calls the 3-day score feed when a recently finished game lack
   assert.equal(db.state.get("g1").closing_away_spread, -3);
 });
 
-test("stale missing finals outside the provider lookback do not trigger repeated paid calls", async () => {
+test("stale missing finals use free repair before paid score calls", async () => {
   const db = fakeDb({
     games: [scheduledGame({ id: "old", kickoffAt: "2026-09-10T00:15:00Z" })]
   });
-  let calls = 0;
+  let paidCalls = 0;
+  let repairCalls = 0;
 
   const result = await syncResultsIfDue({
     db,
     apiKey: "test-key",
     now: new Date("2026-09-15T12:15:00Z"),
     fetchScores: async () => {
-      calls += 1;
+      paidCalls += 1;
       return { quota: {}, games: [] };
+    },
+    repairStale: async ({ db: target, missingGames }) => {
+      repairCalls += 1;
+      assert.equal(missingGames.length, 1);
+      const game = target.state.get("old");
+      game.status = "COMPLETED";
+      game.away_score = 10;
+      game.home_score = 13;
+      target.state.set("old", game);
+      return { attempted: 1, candidates: 1, repaired: 1, unresolved: 0, source: "nflverse" };
     }
   });
 
-  assert.equal(calls, 0);
+  assert.equal(repairCalls, 1);
+  assert.equal(paidCalls, 0);
+  assert.equal(result.apiCalled, false);
+  assert.equal(result.reason, "STALE_RESULTS_REPAIRED");
+  assert.equal(result.integrityAfter.missingCount, 0);
+  assert.equal(db.state.get("old").away_score, 10);
+  assert.equal(db.state.get("old").home_score, 13);
+});
+
+test("unresolved stale finals do not trigger repeated paid calls", async () => {
+  const db = fakeDb({
+    games: [scheduledGame({ id: "old", kickoffAt: "2026-09-10T00:15:00Z" })]
+  });
+  let paidCalls = 0;
+
+  const result = await syncResultsIfDue({
+    db,
+    apiKey: "test-key",
+    now: new Date("2026-09-15T12:15:00Z"),
+    fetchScores: async () => {
+      paidCalls += 1;
+      return { quota: {}, games: [] };
+    },
+    repairStale: async () => ({ attempted: 1, candidates: 0, repaired: 0, unresolved: 1, source: "nflverse" })
+  });
+
+  assert.equal(paidCalls, 0);
   assert.equal(result.apiCalled, false);
   assert.equal(result.reason, "MISSING_OUTSIDE_SCORE_LOOKBACK");
   assert.equal(result.integrityBefore.staleMissingCount, 1);
 });
 
-test("weekly results status distinguishes completed, awaiting, and overdue missing finals", async () => {
+test("weekly results status distinguishes completed, awaiting, and overdue missing finals and exposes final rows", async () => {
   const db = fakeDb({
     games: [
       scheduledGame({
@@ -209,6 +246,8 @@ test("weekly results status distinguishes completed, awaiting, and overdue missi
   assert.equal(status.missingFinals, 1);
   assert.equal(status.weekComplete, false);
   assert.equal(status.missing[0].id, "missing");
+  assert.equal(status.games.find((game) => game.id === "done").final, true);
+  assert.equal(status.games.find((game) => game.id === "done").awayScore, 27);
 });
 
 test("Cloudflare cron keeps the guarded results check once daily at 12:15 UTC", () => {
