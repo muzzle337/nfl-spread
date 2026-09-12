@@ -208,7 +208,7 @@ async function latestBookLinesForGame(db, gameId) {
   return result.results ?? [];
 }
 
-async function currentSeasonSettledGamesBeforeWeek(db, season, week) {
+async function currentSeasonSettledGamesThroughWeek(db, season, week) {
   const result = await db.prepare(`
     SELECT
       id, season, week, season_type, away_team, home_team, kickoff_at, status,
@@ -216,7 +216,8 @@ async function currentSeasonSettledGamesBeforeWeek(db, season, week) {
     FROM games
     WHERE season = ?
       AND season_type = 'REGULAR'
-      AND week < ?
+      AND week <= ?
+      AND status = 'COMPLETED'
       AND away_score IS NOT NULL
       AND home_score IS NOT NULL
     ORDER BY week ASC, kickoff_at ASC, id ASC
@@ -237,6 +238,10 @@ async function currentSeasonSettledGamesBeforeWeek(db, season, week) {
     }
 
     settled.push({
+      id: game.id,
+      season: Number(game.season),
+      week: Number(game.week),
+      kickoffAt: game.kickoff_at,
       awaySpread,
       homeSpread: awaySpread === 0 ? 0 : -awaySpread,
       awayScore: game.away_score,
@@ -245,6 +250,16 @@ async function currentSeasonSettledGamesBeforeWeek(db, season, week) {
   }
 
   return { settled, skippedWithoutLine };
+}
+
+function settledBeforeGame(settled, week, kickoffAt) {
+  const kickoffMs = new Date(kickoffAt).getTime();
+  return settled.filter((row) => {
+    if (row.week < week) return true;
+    if (row.week > week) return false;
+    const rowMs = new Date(row.kickoffAt).getTime();
+    return Number.isFinite(rowMs) && Number.isFinite(kickoffMs) && rowMs < kickoffMs;
+  });
 }
 
 async function projectionThresholds(db) {
@@ -294,15 +309,28 @@ export async function projectionsForWeek(db, season, week) {
 
   const [consensus, history, thresholds] = await Promise.all([
     consensusLinesForWeek(db, seasonNumber, weekNumber),
-    currentSeasonSettledGamesBeforeWeek(db, seasonNumber, weekNumber),
+    currentSeasonSettledGamesThroughWeek(db, seasonNumber, weekNumber),
     projectionThresholds(db)
   ]);
 
-  const stats = buildCurrentSeasonStats(history.settled);
+  const openingSettled = history.settled.filter((row) => row.week < weekNumber);
+  const openingWeekStats = buildCurrentSeasonStats(openingSettled);
+  const liveWeekStats = buildCurrentSeasonStats(history.settled);
+
   const games = await Promise.all(consensus.games.map(async (game) => {
-    const projected = projectConsensusGame(game, stats, thresholds);
+    const gameSettled = settledBeforeGame(history.settled, weekNumber, game.kickoffAt);
+    const statsAtKickoff = buildCurrentSeasonStats(gameSettled);
+    const projected = projectConsensusGame(game, statsAtKickoff, thresholds);
     const moneyline = await safeMoneylineForGame(db, game);
-    return { ...projected, moneyline };
+    return {
+      ...projected,
+      moneyline,
+      tierSnapshot: {
+        basis: "completed_current_season_games_before_this_kickoff",
+        gamesConsidered: statsAtKickoff.gamesConsidered,
+        openingWeekGamesConsidered: openingWeekStats.gamesConsidered
+      }
+    };
   }));
 
   return {
@@ -310,13 +338,17 @@ export async function projectionsForWeek(db, season, week) {
     week: weekNumber,
     seasonType: "REGULAR",
     gameCount: games.length,
-    projectionBasis: "current_season_completed_prior_weeks",
-    statsThroughWeek: weekNumber - 1,
+    projectionBasis: "current_season_completed_games_before_each_kickoff",
+    statsThroughWeek: liveWeekStats.gamesConsidered > openingWeekStats.gamesConsidered ? weekNumber : weekNumber - 1,
     currentSeasonOnly: true,
+    liveInWeekTiers: true,
+    preservesOpeningWeekTiers: true,
     tierDefinitions: TIER_DEFINITIONS,
     thresholds,
-    currentSeasonGamesConsidered: stats.gamesConsidered,
-    currentSeasonGamesSkipped: stats.gamesSkipped + history.skippedWithoutLine,
+    openingWeekStats,
+    liveWeekStats,
+    currentSeasonGamesConsidered: liveWeekStats.gamesConsidered,
+    currentSeasonGamesSkipped: liveWeekStats.gamesSkipped + history.skippedWithoutLine,
     focusCount: games.filter((game) => game.focus).length,
     games
   };
