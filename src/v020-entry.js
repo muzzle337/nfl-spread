@@ -32,7 +32,8 @@ async function recordHourlyResultUsage(env,result){
 }
 
 async function invalidateIfFinalChanged(env,result){
-  if(!env.DB||Number(result?.ingestion?.gamesUpdated??0)<=0)return false;
+  const changed=Number(result?.ingestion?.gamesUpdated??0)+Number(result?.staleRepair?.repaired??0);
+  if(!env.DB||changed<=0)return false;
   await invalidateWeeklyOutlookCache(env.DB);
   return true;
 }
@@ -42,7 +43,7 @@ async function hourlyResultSync(env,now){
   const result=await syncResultsIfDue({db:env.DB,apiKey:env.ODDS_API_KEY,now});
   await recordHourlyResultUsage(env,result);
   const cacheInvalidated=await invalidateIfFinalChanged(env,result);
-  console.log('Hourly result sync',JSON.stringify({apiCalled:result.apiCalled,reason:result.reason,gamesUpdated:result.ingestion?.gamesUpdated??0,cacheInvalidated}));
+  console.log('Hourly result sync',JSON.stringify({apiCalled:result.apiCalled,reason:result.reason,gamesUpdated:result.ingestion?.gamesUpdated??0,staleRepaired:result.staleRepair?.repaired??0,cacheInvalidated}));
   return result;
 }
 
@@ -50,7 +51,7 @@ async function upgrade(request,response,env){
   const url=new URL(request.url);
   if(url.pathname==='/api/health'){
     const b=await response.json().catch(()=>null);if(!b||typeof b!=='object')return response;
-    return json({...b,version:APP_VERSION,opportunityEdgeFocus:true,focusAffectsPredictions:false,focusRawHistoryReads:false,focusBackgroundPolling:false,resultsAutoSync:'hourly_guard_when_final_due_plus_daily_safety',finalGraceHours:FINAL_GRACE_HOURS,resultCacheInvalidation:true},response.status,response.headers);
+    return json({...b,version:APP_VERSION,opportunityEdgeFocus:true,focusAffectsPredictions:false,focusRawHistoryReads:false,focusBackgroundPolling:false,resultsAutoSync:'hourly_guard_when_final_due_plus_daily_safety',finalGraceHours:FINAL_GRACE_HOURS,resultCacheInvalidation:true,staleFinalRecovery:'nflverse'},response.status,response.headers);
   }
   if(request.method==='POST'&&url.pathname==='/api/ingest/nfl/results'&&response.ok&&env.DB){
     const payload=await response.clone().json().catch(()=>null);

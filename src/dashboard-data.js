@@ -58,8 +58,20 @@ export async function dashboardSnapshot(db, now = new Date()) {
     weekResultsStatus(db, target.season, target.week, now)
   ]);
 
+  const resultById = new Map((results.games ?? []).map((game) => [String(game.id), game]));
+  const games = (projection.games ?? []).map((game) => {
+    const result = resultById.get(String(game.id));
+    const isFinal = Boolean(result?.final);
+    return {
+      ...game,
+      status: result?.status ?? game.status ?? null,
+      final: isFinal ? { awayScore: Number(result.awayScore), homeScore: Number(result.homeScore) } : null
+    };
+  });
+
   return {
     ...projection,
+    games,
     results
   };
 }
