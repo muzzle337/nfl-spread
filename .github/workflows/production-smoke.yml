@@ -26,16 +26,16 @@ jobs:
               data=json.loads(sys.argv[1])
           except Exception:
               raise SystemExit(1)
-          raise SystemExit(0 if data.get('version') == '0.21.2' else 1)
+          raise SystemExit(0 if data.get('version') == '0.21.3' else 1)
           PY
             then
-              echo "Production is serving v0.21.2"
+              echo "Production is serving v0.21.3"
               exit 0
             fi
             echo "Attempt $attempt: waiting for Cloudflare deployment..."
             sleep 20
           done
-          echo "Production never served v0.21.2"
+          echo "Production never served v0.21.3"
           exit 1
 
       - name: Verify real Week 1 finals and live tiers
@@ -80,17 +80,20 @@ jobs:
           live=(dashboard.get('liveWeekStats') or {}).get('gamesConsidered')
           snapshots=[(g.get('tierSnapshot') or {}).get('gamesConsidered',0) for g in dash_games]
           tiers_ok=(opening == 0 and isinstance(live,(int,float)) and live >= 2 and max(snapshots or [0]) >= 2)
+          visible_edges=[g for g in dash_games if g.get('projectionStatus') == 'READY' and isinstance(g.get('projectedCoverRate'), (int,float))]
+          tier_data_ok=len(visible_edges) >= 1
 
           print('completedGames=', results.get('completedGames'))
           print('NE@SEA=', ne)
           print('SF@LAR=', sf)
           print('openingWeekGames=', opening, 'liveWeekGames=', live, 'maxGameSnapshot=', max(snapshots or [0]))
-          if finals_ok and dashboard_finals_ok and tiers_ok:
+          print('gamesWithTierPercent=', len(visible_edges))
+          if finals_ok and dashboard_finals_ok and tiers_ok and tier_data_ok:
               raise SystemExit(0)
           raise SystemExit(1)
           PY
             then
-              echo "Production acceptance passed: real finals + dashboard finals + live tier progression"
+              echo "Production acceptance passed: real finals + dashboard finals + live tier progression + visible tier data"
               exit 0
             fi
             echo "Attempt $attempt: production data not ready yet; retrying in 60s"
@@ -99,15 +102,19 @@ jobs:
           echo "Production did not satisfy Week 1 acceptance criteria within 50 minutes"
           exit 1
 
-      - name: Verify production HTML contains final-score renderer and no legacy pool poll
+      - name: Verify production HTML score and tier presentation
         shell: bash
         run: |
           set -euo pipefail
           html="$(curl -fsS --max-time 30 https://nfl-spread-api.sanro4.workers.dev/)"
           grep -q "FINAL ·" <<<"$html"
+          grep -q "LIVE TIER EDGE" <<<"$html"
+          grep -q "PREGAME TIER EDGE" <<<"$html"
+          grep -q "tier-signal-value" <<<"$html"
+          grep -q "font-size:16px" <<<"$html"
           if grep -q "setInterval(function(){if(!S.picksMode)load()},120000)" <<<"$html"; then
             echo "Legacy 120-second pool poll is still present"
             exit 1
           fi
-          grep -q "0.21.2" <<<"$html"
-          echo "Production HTML acceptance passed"
+          grep -q "0.21.3" <<<"$html"
+          echo "Production HTML acceptance passed: score prominence + tier percentage presentation"
