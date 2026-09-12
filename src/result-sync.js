@@ -1,5 +1,6 @@
 import { fetchNflScores } from "./odds.js";
 import { ingestCompletedScores } from "./results.js";
+import { repairMissingFinalsFromNflverse } from "./stale-results-repair.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -161,20 +162,37 @@ export async function syncResultsIfDue({
   db,
   apiKey,
   now = new Date(),
-  fetchScores = fetchNflScores
+  fetchScores = fetchNflScores,
+  repairStale = repairMissingFinalsFromNflverse
 }) {
   if (!db) throw new Error("Database is not bound");
   if (!apiKey) throw new Error("ODDS_API_KEY is not configured");
 
   const before = await resultsIntegrity(db, now);
-  if (before.eligibleForAutoSyncCount === 0) {
+  let staleRepair = null;
+
+  if (before.staleMissingCount > 0) {
+    const staleRows = await missingFinalGames(db, now, FINAL_GRACE_HOURS);
+    const { staleMissing } = partitionMissingFinals(staleRows, now, SCORE_LOOKBACK_DAYS);
+    try {
+      staleRepair = await repairStale({ db, missingGames: staleMissing });
+    } catch (error) {
+      staleRepair = { attempted: staleMissing.length, candidates: 0, repaired: 0, unresolved: staleMissing.length, source: "nflverse", error: error.message };
+    }
+  }
+
+  const afterStaleRepair = await resultsIntegrity(db, now);
+  if (afterStaleRepair.eligibleForAutoSyncCount === 0) {
     return {
       apiCalled: false,
-      reason: before.staleMissingCount > 0 ? "MISSING_OUTSIDE_SCORE_LOOKBACK" : "NO_RESULTS_DUE",
+      reason: afterStaleRepair.missingCount === 0
+        ? (staleRepair?.repaired > 0 ? "STALE_RESULTS_REPAIRED" : "NO_RESULTS_DUE")
+        : "MISSING_OUTSIDE_SCORE_LOOKBACK",
       lookbackDays: SCORE_LOOKBACK_DAYS,
       quota: null,
       integrityBefore: before,
-      integrityAfter: before,
+      integrityAfter: afterStaleRepair,
+      staleRepair,
       ingestion: null
     };
   }
@@ -190,6 +208,7 @@ export async function syncResultsIfDue({
     quota: result.quota,
     integrityBefore: before,
     integrityAfter: after,
+    staleRepair,
     ingestion
   };
 }
