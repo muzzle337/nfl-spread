@@ -17,7 +17,7 @@ test('Live Focus fixture shows the decision-critical information above the fold'
   await expect(card).toContainText('NO +7.5');
   await expect(card).toContainText('NO +240');
   await expect(card).toContainText('A TIER · 72%');
-  await expect(card).toContainText('+3.5 pts better than our pregame number');
+  await expect(card).toContainText('+3.5 pts better than pregame');
   await expect(card).toContainText('WHY WE CARED');
 
   const box = await card.boundingBox();
