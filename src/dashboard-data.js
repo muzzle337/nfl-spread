@@ -1,5 +1,58 @@
 import { projectionsForWeek } from "./projection.js";
 import { weekResultsStatus } from "./result-sync.js";
+import { settleAgainstSpread } from "./engine.js";
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function tierBucket(stats, classification, tier) {
+  if (!classification || !tier) return null;
+  return stats?.buckets?.[`${classification}|${tier}`] ?? null;
+}
+
+function postgameAnalysis(game, final, liveWeekStats) {
+  if (!final || !game?.classification) return null;
+  const awaySpread = finiteNumber(game.medianAwaySpread);
+  const homeSpread = finiteNumber(game.medianHomeSpread);
+  const awayScore = finiteNumber(final.awayScore);
+  const homeScore = finiteNumber(final.homeScore);
+  if ([awaySpread, homeSpread, awayScore, homeScore].some((value) => value === null)) return null;
+
+  let settlement;
+  try {
+    settlement = settleAgainstSpread({ awaySpread, homeSpread, awayScore, homeScore });
+  } catch {
+    return null;
+  }
+
+  const tier = game.classification.tier;
+  if (settlement.coveringSide === "Push") {
+    const bucket = tierBucket(liveWeekStats, game.classification.away, tier);
+    return {
+      spreadResult: "PUSH",
+      coveringSide: "PUSH",
+      coveringTeam: null,
+      classification: null,
+      tier,
+      liveBucket: bucket
+    };
+  }
+
+  const awayCovered = settlement.coveringSide === "Away";
+  const classification = awayCovered ? game.classification.away : game.classification.home;
+  const bucket = tierBucket(liveWeekStats, classification, tier);
+  return {
+    spreadResult: "COVER",
+    coveringSide: awayCovered ? "AWAY" : "HOME",
+    coveringTeam: awayCovered ? game.awayTeam : game.homeTeam,
+    classification,
+    tier,
+    liveBucket: bucket
+  };
+}
 
 export async function resolveDashboardWeek(db) {
   if (!db) throw new Error("Database is not bound");
@@ -62,10 +115,12 @@ export async function dashboardSnapshot(db, now = new Date()) {
   const games = (projection.games ?? []).map((game) => {
     const result = resultById.get(String(game.id));
     const isFinal = Boolean(result?.final);
+    const final = isFinal ? { awayScore: Number(result.awayScore), homeScore: Number(result.homeScore) } : null;
     return {
       ...game,
       status: result?.status ?? game.status ?? null,
-      final: isFinal ? { awayScore: Number(result.awayScore), homeScore: Number(result.homeScore) } : null
+      final,
+      postgame: postgameAnalysis(game, final, projection.liveWeekStats)
     };
   });
 
