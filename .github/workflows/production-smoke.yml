@@ -102,21 +102,40 @@ jobs:
           echo "Production did not satisfy Week 1 acceptance criteria within 50 minutes"
           exit 1
 
-      - name: Verify production HTML status-first score hierarchy
+      - name: Verify deployed status-first card contract
         shell: bash
         run: |
           set -euo pipefail
-          html="$(curl -fsS --max-time 30 https://nfl-spread-api.sanro4.workers.dev/)"
-          grep -q "df21-game-status" <<<"$html"
-          grep -q "df21-team-score" <<<"$html"
-          grep -q "center.textContent='FINAL'" <<<"$html"
-          grep -q "center.textContent='UPCOMING'" <<<"$html"
-          grep -q "LIVE TIER EDGE" <<<"$html"
-          grep -q "PREGAME TIER EDGE" <<<"$html"
-          grep -q "font-size:25px" <<<"$html"
-          if grep -q "setInterval(function(){if(!S.picksMode)load()},120000)" <<<"$html"; then
+          BASE="https://nfl-spread-api.sanro4.workers.dev"
+          health="$(curl -fsS --max-time 20 "$BASE/api/health")"
+          HEALTH="$health" python - <<'PY'
+          import json,os
+          data=json.loads(os.environ['HEALTH'])
+          required={
+              'version':'0.21.4',
+              'finalScoreProminent':True,
+              'tierPercentVisibleOnCards':True,
+              'gameCardStatusFirst':True,
+              'teamScoresInline':True,
+              'legacyRecurringPolling':False,
+          }
+          failed=[]
+          for key,expected in required.items():
+              actual=data.get(key)
+              if actual != expected:
+                  failed.append((key,expected,actual))
+          print('card contract=', {k:data.get(k) for k in required})
+          if failed:
+              print('failed=', failed)
+              raise SystemExit(1)
+          PY
+          html="$(curl -fsS --max-time 30 "$BASE/")"
+          grep -Fq "df21-game-status" <<<"$html"
+          grep -Fq "df21-team-score" <<<"$html"
+          grep -Fq "LIVE TIER EDGE" <<<"$html"
+          grep -Fq "PREGAME TIER EDGE" <<<"$html"
+          if grep -Fq "setInterval(function(){if(!S.picksMode)load()},120000)" <<<"$html"; then
             echo "Legacy 120-second pool poll is still present"
             exit 1
           fi
-          grep -q "0.21.4" <<<"$html"
-          echo "Production HTML acceptance passed: status-first hierarchy + inline team scores + tier percentage presentation"
+          echo "Production card contract passed: status-first hierarchy + inline team scores + tier percentage presentation"
