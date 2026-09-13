@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs';
 import { withV021Ui } from '../src/v021-ui.js';
 import { APP_VERSION } from '../src/v021-entry.js';
 
-test('v0.21.4 is the production entry and package version',()=>{
+test('v0.21.5 is the production entry and package version',()=>{
   const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
-  assert.equal(APP_VERSION,'0.21.4');
-  assert.equal(pkg.version,'0.21.4');
+  assert.equal(APP_VERSION,'0.21.5');
+  assert.equal(pkg.version,'0.21.5');
   assert.match(wrangler,/src\/v021-entry\.js/);
 });
 
@@ -39,19 +39,22 @@ test('canonical UI exposes source freshness and complete game intelligence witho
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('core recovery entry makes game status primary and places team scores under each team',()=>{
+test('final cards render status and scores directly and replace pregame edge with postgame stats',()=>{
   const entry=readFileSync(new URL('../src/v021-entry.js',import.meta.url),'utf8');
+  const data=readFileSync(new URL('../src/dashboard-data.js',import.meta.url),'utf8');
   assert.match(entry,/df21-game-status/);
   assert.match(entry,/df21-team-score/);
-  assert.match(entry,/center\.textContent='FINAL'/);
-  assert.match(entry,/center\.textContent='UPCOMING'/);
-  assert.match(entry,/game-card\.df21-final \.kickoff\{display:none!important\}/);
-  assert.match(entry,/font-size:25px/);
-  assert.match(entry,/teamScoresInline:true/);
-  assert.match(entry,/gameCardStatusFirst:true/);
-  assert.match(entry,/LIVE TIER EDGE/);
-  assert.match(entry,/PREGAME TIER EDGE/);
-  assert.match(entry,/tierPercentVisibleOnCards:true/);
+  assert.match(entry,/game\.final\?'FINAL':'UPCOMING'/);
+  assert.match(entry,/FINAL SPREAD RESULT/);
+  assert.doesNotMatch(entry,/PREGAME TIER EDGE/);
+  assert.match(entry,/post\.spreadResult==='PUSH'/);
+  assert.match(entry,/COVERED/);
+  assert.match(entry,/finalCardsPostgameOnly:true/);
+  assert.match(entry,/finalCardPostgameStats:true/);
+  assert.match(entry,/font-size:28px/);
+  assert.match(data,/postgameAnalysis/);
+  assert.match(data,/settleAgainstSpread/);
+  assert.match(data,/liveBucket/);
 });
 
 test('detail matchup detection is resilient beyond legacy detail-title selector',()=>{
