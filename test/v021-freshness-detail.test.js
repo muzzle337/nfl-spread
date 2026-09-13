@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { withV021Ui } from '../src/v021-ui.js';
+import { withCanonicalGameDetail } from '../src/canonical-game-detail.js';
 import { APP_VERSION } from '../src/v021-entry.js';
 
-test('v0.21.5 is the production entry and package version',()=>{
+test('v0.21.6 is the production entry and package version',()=>{
   const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
-  assert.equal(APP_VERSION,'0.21.5');
-  assert.equal(pkg.version,'0.21.5');
+  assert.equal(APP_VERSION,'0.21.6');
+  assert.equal(pkg.version,'0.21.6');
   assert.match(wrangler,/src\/v021-entry\.js/);
 });
 
@@ -35,6 +36,23 @@ test('canonical UI exposes source freshness and complete game intelligence witho
   assert.match(html,/FINAL/);
   assert.match(html,/data-cg19-board/);
   assert.doesNotMatch(html,/setInterval\([^\n]*fetch/);
+  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+  scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
+});
+
+test('canonical Game Detail runtime matches approved hierarchy and compiles',()=>{
+  const base='<!doctype html><html><head></head><body><div class="detail"><header class="detail-head"><div class="detail-title">BUF @ HOU</div></header><div class="match-hero"></div><main class="detail-content"></main></div></body></html>';
+  const html=withCanonicalGameDetail(base);
+  assert.match(html,/OUR THESIS/);
+  assert.match(html,/CURRENT SPREAD/);
+  assert.match(html,/CURRENT ML/);
+  assert.match(html,/OUR ORIGINAL THESIS/);
+  assert.match(html,/WHY WE CARED/);
+  assert.match(html,/Line history/);
+  assert.match(html,/Sportsbooks/);
+  assert.match(html,/Historical evidence/);
+  assert.match(html,/canonical-game-detail/);
+  assert.doesNotMatch(html,/PROJECTED · CURRENT SEASON/);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });

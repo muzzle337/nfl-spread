@@ -31,3 +31,10 @@ jobs:
           name: live-focus-fixture
           path: test-results/live-focus-fixture.png
           if-no-files-found: ignore
+      - name: Upload Game Detail fixture screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-detail-fixture
+          path: test-results/game-detail-fixture.png
+          if-no-files-found: ignore
