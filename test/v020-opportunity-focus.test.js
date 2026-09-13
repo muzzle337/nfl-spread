@@ -60,7 +60,7 @@ test('v0.20.1 read-safety and fresh final-score contract remain under later wrap
   const route=readFileSync(new URL('../src/v020-entry.js',import.meta.url),'utf8');
   const engine=readFileSync(new URL('../src/opportunity-focus.js',import.meta.url),'utf8');
   const resultSync=readFileSync(new URL('../src/result-sync.js',import.meta.url),'utf8');
-  assert.match(wrangler,/src\/v02[0-9]-entry\.js/);
+  assert.match(wrangler,/src\/v02(?:[0-9]|17)-entry\.js/);
   assert.ok(/^0\.2[0-9]\./.test(pkg.version));
   assert.match(route,/rawHistoricalGames:false/);
   assert.doesNotMatch(route+engine,/historical_games/);
