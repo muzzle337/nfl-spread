@@ -32,16 +32,16 @@ jobs:
               data=json.loads(sys.argv[1])
           except Exception:
               raise SystemExit(1)
-          raise SystemExit(0 if data.get('version') == '0.21.6' else 1)
+          raise SystemExit(0 if data.get('version') == '0.21.7' else 1)
           PY
             then
-              echo "Production is serving v0.21.6"
+              echo "Production is serving v0.21.7"
               exit 0
             fi
             echo "Attempt $attempt: waiting for Cloudflare deployment..."
             sleep 20
           done
-          echo "Production never served v0.21.6"
+          echo "Production never served v0.21.7"
           exit 1
 
       - name: Verify real Week 1 finals, postgame stats, and live tiers
@@ -60,41 +60,20 @@ jobs:
           except Exception as exc:
               print('JSON parse failed:', exc)
               raise SystemExit(1)
-
           games=results.get('games') or []
-          def find(away,home):
-              return next((g for g in games if g.get('awayTeam')==away and g.get('homeTeam')==home), None)
-          ne=find('New England Patriots','Seattle Seahawks')
-          sf=find('San Francisco 49ers','Los Angeles Rams')
-          finals_ok=(
-              ne and ne.get('final') is True and ne.get('awayScore')==10 and ne.get('homeScore')==13 and
-              sf and sf.get('final') is True and sf.get('awayScore')==27 and sf.get('homeScore')==7
-          )
-
+          def find(away,home): return next((g for g in games if g.get('awayTeam')==away and g.get('homeTeam')==home), None)
+          ne=find('New England Patriots','Seattle Seahawks'); sf=find('San Francisco 49ers','Los Angeles Rams')
+          finals_ok=(ne and ne.get('final') is True and ne.get('awayScore')==10 and ne.get('homeScore')==13 and sf and sf.get('final') is True and sf.get('awayScore')==27 and sf.get('homeScore')==7)
           dash_games=dashboard.get('games') or []
-          def dash_find(away,home):
-              return next((g for g in dash_games if g.get('awayTeam')==away and g.get('homeTeam')==home), None)
-          dne=dash_find('New England Patriots','Seattle Seahawks')
-          dsf=dash_find('San Francisco 49ers','Los Angeles Rams')
-          dashboard_finals_ok=(
-              dne and (dne.get('final') or {}).get('awayScore')==10 and (dne.get('final') or {}).get('homeScore')==13 and
-              dsf and (dsf.get('final') or {}).get('awayScore')==27 and (dsf.get('final') or {}).get('homeScore')==7
-          )
-          postgame_ok=(
-              dne and (dne.get('postgame') or {}).get('spreadResult')=='PUSH' and
-              dsf and (dsf.get('postgame') or {}).get('coveringTeam')=='San Francisco 49ers' and
-              ((dsf.get('postgame') or {}).get('liveBucket') or {}).get('wins',0) >= 1
-          )
-          opening=(dashboard.get('openingWeekStats') or {}).get('gamesConsidered')
-          live=(dashboard.get('liveWeekStats') or {}).get('gamesConsidered')
+          def dash_find(away,home): return next((g for g in dash_games if g.get('awayTeam')==away and g.get('homeTeam')==home), None)
+          dne=dash_find('New England Patriots','Seattle Seahawks'); dsf=dash_find('San Francisco 49ers','Los Angeles Rams')
+          dashboard_finals_ok=(dne and (dne.get('final') or {}).get('awayScore')==10 and (dne.get('final') or {}).get('homeScore')==13 and dsf and (dsf.get('final') or {}).get('awayScore')==27 and (dsf.get('final') or {}).get('homeScore')==7)
+          postgame_ok=(dne and (dne.get('postgame') or {}).get('spreadResult')=='PUSH' and dsf and (dsf.get('postgame') or {}).get('coveringTeam')=='San Francisco 49ers' and ((dsf.get('postgame') or {}).get('liveBucket') or {}).get('wins',0) >= 1)
+          opening=(dashboard.get('openingWeekStats') or {}).get('gamesConsidered'); live=(dashboard.get('liveWeekStats') or {}).get('gamesConsidered')
           snapshots=[(g.get('tierSnapshot') or {}).get('gamesConsidered',0) for g in dash_games]
           tiers_ok=(opening == 0 and isinstance(live,(int,float)) and live >= 2 and max(snapshots or [0]) >= 2)
           visible_edges=[g for g in dash_games if g.get('projectionStatus') == 'READY' and isinstance(g.get('projectedCoverRate'), (int,float))]
-          tier_data_ok=len(visible_edges) >= 1
-          print('NE@SEA postgame=', dne.get('postgame') if dne else None)
-          print('SF@LAR postgame=', dsf.get('postgame') if dsf else None)
-          if finals_ok and dashboard_finals_ok and postgame_ok and tiers_ok and tier_data_ok:
-              raise SystemExit(0)
+          if finals_ok and dashboard_finals_ok and postgame_ok and tiers_ok and len(visible_edges)>=1: raise SystemExit(0)
           raise SystemExit(1)
           PY
             then
@@ -104,7 +83,6 @@ jobs:
             echo "Attempt $attempt: production data not ready yet; retrying in 60s"
             sleep 60
           done
-          echo "Production did not satisfy acceptance criteria within 50 minutes"
           exit 1
 
       - name: Verify deployed UI contract
@@ -117,7 +95,7 @@ jobs:
           import json,os
           data=json.loads(os.environ['HEALTH'])
           required={
-              'version':'0.21.6',
+              'version':'0.21.7',
               'finalScoreProminent':True,
               'tierPercentVisibleOnCards':True,
               'gameCardStatusFirst':True,
@@ -128,13 +106,13 @@ jobs:
               'canonicalGameDetail':True,
               'canonicalGameDetailRendered':True,
               'gameDetailVisualGate':True,
+              'manualRefreshIncludesScores':True,
+              'canonicalDetailFallback':True,
               'legacyRecurringPolling':False,
           }
           failed=[]
           for key,expected in required.items():
-              actual=data.get(key)
-              if actual != expected:
-                  failed.append((key,expected,actual))
+              if data.get(key) != expected: failed.append((key,expected,data.get(key)))
           if failed:
               print('failed=', failed)
               raise SystemExit(1)
