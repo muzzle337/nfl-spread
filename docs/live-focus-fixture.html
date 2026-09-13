@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Live Focus Fixture</title>
+<style>
+:root{color-scheme:dark;--bg:#080b10;--panel:#0e141c;--panel2:#121a24;--border:#233041;--text:#f4f7fb;--muted:#8c9aaa;--blue:#4ca6ff;--green:#72dc66;--yellow:#f1c84b;--red:#ff7e7e;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:#05080c;color:var(--text);-webkit-font-smoothing:antialiased}.phone{width:390px;min-height:844px;margin:0 auto;background:linear-gradient(180deg,#0b1118 0,#080b10 180px);padding-bottom:28px}.top{padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.07)}.eyebrow{font-size:10px;font-weight:900;letter-spacing:.09em;color:var(--blue)}h1{font-size:19px;margin:4px 0 2px}.sub{font-size:11px;color:var(--muted)}.watchbar{display:flex;gap:8px;padding:12px 14px 6px;overflow:auto}.chip{border:1px solid var(--border);background:var(--panel);border-radius:999px;padding:7px 10px;font-size:10px;font-weight:850;color:var(--muted);white-space:nowrap}.chip.active{background:var(--blue);border-color:var(--blue);color:#06111b}.section{padding:8px 14px}.section-title{font-size:11px;font-weight:900;letter-spacing:.075em;color:#b5c1cc;margin:4px 2px 9px}.card{border:1px solid var(--border);background:linear-gradient(180deg,var(--panel2),var(--panel));border-radius:16px;padding:13px;box-shadow:0 12px 30px rgba(0,0,0,.22)}.game-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}.team.right{text-align:right}.team-code{font-size:19px;font-weight:950}.team-name{font-size:10px;color:var(--muted);margin-top:2px}.score{font-size:31px;font-weight:950;line-height:1;margin-top:8px}.status{text-align:center}.live{font-size:10px;font-weight:950;letter-spacing:.08em;color:var(--green)}.clock{font-size:12px;font-weight:850;margin-top:4px}.marketline{margin-top:12px;border-top:1px solid rgba(255,255,255,.07);padding-top:11px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}.m{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:9px}.label{font-size:8px;letter-spacing:.06em;color:#718091;font-weight:850}.value{font-size:13px;font-weight:900;margin-top:4px}.value.blue{color:var(--blue)}.value.green{color:var(--green)}.edge{margin-top:10px;border:1px solid rgba(76,166,255,.32);background:rgba(76,166,255,.08);border-radius:12px;padding:11px}.edge-head{display:flex;justify-content:space-between;gap:10px}.edge-title{font-size:9px;font-weight:900;letter-spacing:.06em;color:#9fb1c2}.grade{font-size:10px;font-weight:950;color:var(--yellow)}.edge-main{font-size:17px;font-weight:950;margin-top:4px}.edge-sub{font-size:10px;color:var(--muted);line-height:1.35;margin-top:4px}.context{margin-top:10px;border-top:1px solid rgba(255,255,255,.07);padding-top:10px}.context-head{display:flex;justify-content:space-between;font-size:9px;font-weight:900;letter-spacing:.06em;color:#9fb1c2}.context-copy{font-size:11px;line-height:1.45;color:#d1d9e1;margin-top:6px}.context-copy b{color:var(--text)}.cta{margin-top:10px;width:100%;border:1px solid var(--border);background:#0b1118;color:#b9c6d2;border-radius:11px;padding:10px;font-size:10px;font-weight:850}.note{margin-top:9px;font-size:9px;color:#617184;text-align:center}.second{margin-top:10px;opacity:.64}.second .score{font-size:24px}.second .edge{display:none}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="top">
+    <div class="eyebrow">LIVE FOCUS</div>
+    <h1>Games that matter right now</h1>
+    <div class="sub">Pinned games first · live score + live market + our original tier</div>
+  </div>
+  <div class="watchbar"><span class="chip active">★ Watching 2</span><span class="chip">A Tier</span><span class="chip">Live only</span><span class="chip">All games</span></div>
+  <div class="section">
+    <div class="section-title">WATCHING</div>
+    <article class="card" data-live-focus-card="NO-DET">
+      <div class="game-top">
+        <div class="team"><div class="team-code">NO</div><div class="team-name">Saints</div><div class="score">17</div></div>
+        <div class="status"><div class="live">LIVE</div><div class="clock">Q3 · 8:42</div></div>
+        <div class="team right"><div class="team-code">DET</div><div class="team-name">Lions</div><div class="score">14</div></div>
+      </div>
+      <div class="marketline">
+        <div class="m"><div class="label">OUR PREGAME</div><div class="value blue">NO +4</div></div>
+        <div class="m"><div class="label">LIVE SPREAD</div><div class="value green">NO +7.5</div></div>
+        <div class="m"><div class="label">LIVE ML</div><div class="value">NO +240</div></div>
+      </div>
+      <div class="edge">
+        <div class="edge-head"><div class="edge-title">LIVE OPPORTUNITY CHECK</div><div class="grade">A TIER · 72%</div></div>
+        <div class="edge-main">+3.5 pts better than our pregame number</div>
+        <div class="edge-sub">Price improved from NO +4 to NO +7.5. Do not call it an opportunity from movement alone — compare against current score/game state.</div>
+      </div>
+      <div class="context">
+        <div class="context-head"><span>WHY WE CARED</span><span>2 SIGNALS</span></div>
+        <div class="context-copy"><b>Tier:</b> Saints fit our strongest current-season bucket. <b>Context:</b> historical setup is supportive, but current game state is now the deciding live factor.</div>
+      </div>
+      <button class="cta">Open full game intelligence</button>
+      <div class="note">Updated 24 sec ago</div>
+    </article>
+
+    <article class="card second" data-live-focus-card="DAL-PHI">
+      <div class="game-top">
+        <div class="team"><div class="team-code">DAL</div><div class="team-name">Cowboys</div><div class="score">7</div></div>
+        <div class="status"><div class="live">LIVE</div><div class="clock">Q2 · 4:11</div></div>
+        <div class="team right"><div class="team-code">PHI</div><div class="team-name">Eagles</div><div class="score">10</div></div>
+      </div>
+      <div class="marketline"><div class="m"><div class="label">OUR PREGAME</div><div class="value">DAL +3</div></div><div class="m"><div class="label">LIVE SPREAD</div><div class="value">DAL +5.5</div></div><div class="m"><div class="label">LIVE ML</div><div class="value">DAL +190</div></div></div>
+    </article>
+  </div>
+</div>
+</body>
+</html>
