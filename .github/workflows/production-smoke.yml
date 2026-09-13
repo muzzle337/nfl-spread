@@ -18,7 +18,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Wait for deployed version
         shell: bash
@@ -65,7 +64,6 @@ jobs:
           games=results.get('games') or []
           def find(away,home):
               return next((g for g in games if g.get('awayTeam')==away and g.get('homeTeam')==home), None)
-
           ne=find('New England Patriots','Seattle Seahawks')
           sf=find('San Francisco 49ers','Los Angeles Rams')
           finals_ok=(
@@ -87,17 +85,14 @@ jobs:
               dsf and (dsf.get('postgame') or {}).get('coveringTeam')=='San Francisco 49ers' and
               ((dsf.get('postgame') or {}).get('liveBucket') or {}).get('wins',0) >= 1
           )
-
           opening=(dashboard.get('openingWeekStats') or {}).get('gamesConsidered')
           live=(dashboard.get('liveWeekStats') or {}).get('gamesConsidered')
           snapshots=[(g.get('tierSnapshot') or {}).get('gamesConsidered',0) for g in dash_games]
           tiers_ok=(opening == 0 and isinstance(live,(int,float)) and live >= 2 and max(snapshots or [0]) >= 2)
           visible_edges=[g for g in dash_games if g.get('projectionStatus') == 'READY' and isinstance(g.get('projectedCoverRate'), (int,float))]
           tier_data_ok=len(visible_edges) >= 1
-
           print('NE@SEA postgame=', dne.get('postgame') if dne else None)
           print('SF@LAR postgame=', dsf.get('postgame') if dsf else None)
-          print('openingWeekGames=', opening, 'liveWeekGames=', live, 'maxGameSnapshot=', max(snapshots or [0]))
           if finals_ok and dashboard_finals_ok and postgame_ok and tiers_ok and tier_data_ok:
               raise SystemExit(0)
           raise SystemExit(1)
@@ -137,14 +132,13 @@ jobs:
               actual=data.get(key)
               if actual != expected:
                   failed.append((key,expected,actual))
-          print('card contract=', {k:data.get(k) for k in required})
           if failed:
               print('failed=', failed)
               raise SystemExit(1)
           PY
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
