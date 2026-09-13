@@ -115,11 +115,17 @@ export async function dashboardSnapshot(db, now = new Date()) {
   const games = (projection.games ?? []).map((game) => {
     const result = resultById.get(String(game.id));
     const isFinal = Boolean(result?.final);
-    const final = isFinal ? { awayScore: Number(result.awayScore), homeScore: Number(result.homeScore) } : null;
+    const awayScore = finiteNumber(result?.awayScore);
+    const homeScore = finiteNumber(result?.homeScore);
+    const final = isFinal ? { awayScore, homeScore } : null;
+    const live = !isFinal && result?.status === "LIVE" && awayScore !== null && homeScore !== null
+      ? { awayScore, homeScore }
+      : null;
     return {
       ...game,
       status: result?.status ?? game.status ?? null,
       final,
+      live,
       postgame: postgameAnalysis(game, final, projection.liveWeekStats)
     };
   });
