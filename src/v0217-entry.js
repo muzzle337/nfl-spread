@@ -1,6 +1,6 @@
 import app from './v021-entry.js';
 import { fetchNflScores } from './odds.js';
-import { ingestCompletedScores } from './results.js';
+import { ingestCompletedScores, ingestLiveScores } from './results.js';
 import { invalidateWeeklyOutlookCache } from './weekly-picks.js';
 import { resolveDashboardWeek } from './dashboard-data.js';
 import { weekResultsStatus } from './result-sync.js';
@@ -17,10 +17,10 @@ function upgradeHtml(body){
     .split('0.21.7').join(APP_VERSION)
     .split('0.21.6').join(APP_VERSION)
     .split("'Update Lines'").join("'Refresh Game Data'")
-    .split("'Pull the latest sportsbook spreads. Normally 1 API credit.'").join("'Check finished scores first, then refresh spreads and moneylines.'")
-    .split("action==='spreads'?'⏳ Updating Lines…':'⏳ Checking Final Scores…'").join("action==='spreads'?'⏳ Refreshing Scores + Lines…':'⏳ Checking Final Scores…'")
+    .split("'Pull the latest sportsbook spreads. Normally 1 API credit.'").join("'Refresh live scores first, then spreads and moneylines.'")
+    .split("action==='spreads'?'⏳ Updating Lines…':'⏳ Checking Final Scores…'").join("action==='spreads'?'⏳ Refreshing Live Scores + Lines…':'⏳ Checking Scores…'")
     .split("try{var b=await sessionRequest(path,{method:'POST'});").join("try{var scores=null;if(action==='spreads')scores=await sessionRequest('/api/ingest/nfl/results',{method:'POST'});var b=await sessionRequest(path,{method:'POST'});")
-    .split("action==='spreads'?'Lines Updated':'Final Score Check Complete'").join("action==='spreads'?'Game Data Refreshed':'Final Score Check Complete'")
+    .split("action==='spreads'?'Lines Updated':'Final Score Check Complete'").join("action==='spreads'?'Game Data Refreshed':'Score Check Complete'")
     .split("JSON.stringify(b,null,2)").join("JSON.stringify(action==='spreads'?{scores:scores,market:b}:b,null,2)"));
 }
 
@@ -30,6 +30,13 @@ function providerSummary(games){
     events:rows.length,
     completed:rows.filter(g=>g?.completed===true).length,
     liveOrUpcoming:rows.filter(g=>g?.completed!==true).length,
+    liveGames:rows.filter(g=>g?.completed!==true&&g?.awayScore!==null&&g?.homeScore!==null).map(g=>({
+      id:g.id,
+      matchup:`${g.awayTeam} @ ${g.homeTeam}`,
+      awayScore:g.awayScore,
+      homeScore:g.homeScore,
+      lastUpdate:g.lastUpdate??null
+    })).slice(0,20),
     completedGames:rows.filter(g=>g?.completed===true).map(g=>({
       id:g.id,
       matchup:`${g.awayTeam} @ ${g.homeTeam}`,
@@ -52,8 +59,6 @@ async function forceManualResultsIfNeeded(request,response,env,url){
   const base=await response.clone().json().catch(()=>null);
   if(!base||!env.DB||!env.ODDS_API_KEY) return response;
 
-  // If the guarded path already called the provider, preserve that result but attach
-  // a fresh post-write week status so the caller can verify what is actually final.
   if(base.apiCalled===true){
     const weekStatus=await currentWeekStatus(env).catch(()=>null);
     return json({...base,manualForced:false,weekStatus},response.status,response.headers);
@@ -61,9 +66,10 @@ async function forceManualResultsIfNeeded(request,response,env,url){
 
   try{
     const feed=await fetchNflScores({apiKey:env.ODDS_API_KEY,daysFrom:3});
+    const liveIngestion=await ingestLiveScores(env.DB,feed.games,new Date());
     const ingestion=await ingestCompletedScores(env.DB,feed.games);
-    const gamesChanged=Number(ingestion?.gamesUpdated??0)>0;
-    const cacheInvalidated=gamesChanged?await invalidateWeeklyOutlookCache(env.DB):false;
+    const finalsChanged=Number(ingestion?.gamesUpdated??0)>0;
+    const cacheInvalidated=finalsChanged?await invalidateWeeklyOutlookCache(env.DB):false;
     const weekStatus=await currentWeekStatus(env).catch(()=>null);
     return json({
       ...base,
@@ -72,6 +78,7 @@ async function forceManualResultsIfNeeded(request,response,env,url){
       reason:'MANUAL_SCORE_REFRESH',
       quota:feed.quota,
       provider:providerSummary(feed.games),
+      liveIngestion,
       ingestion,
       cacheInvalidated,
       weekStatus,
@@ -88,7 +95,7 @@ async function upgrade(request,response,env){
   if(url.pathname==='/api/health'){
     const b=await response.json().catch(()=>null);
     if(!b||typeof b!=='object') return response;
-    return json({...b,version:APP_VERSION,sundayRefreshRecovery:true,manualRefreshIncludesScores:true,manualScoreDiagnostics:true,manualScoreCacheInvalidation:true,canonicalDetailFallback:true},response.status,response.headers);
+    return json({...b,version:APP_VERSION,sundayRefreshRecovery:true,manualRefreshIncludesScores:true,manualScoreDiagnostics:true,manualScoreCacheInvalidation:true,liveScoreRefresh:true,canonicalDetailFallback:true},response.status,response.headers);
   }
   if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app')){
     if(!response.ok) return response;
