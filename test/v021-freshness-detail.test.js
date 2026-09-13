@@ -6,11 +6,11 @@ import { withCanonicalGameDetail } from '../src/canonical-game-detail.js';
 import { withV0217DetailGuard } from '../src/v0217-detail-guard.js';
 import { APP_VERSION } from '../src/v0217-entry.js';
 
-test('v0.21.7 is the production entry and package version',()=>{
+test('v0.21.8 is the production entry and package version',()=>{
   const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
-  assert.equal(APP_VERSION,'0.21.7');
-  assert.equal(pkg.version,'0.21.7');
+  assert.equal(APP_VERSION,'0.21.8');
+  assert.equal(pkg.version,'0.21.8');
   assert.match(wrangler,/src\/v0217-entry\.js/);
 });
 
@@ -58,7 +58,7 @@ test('canonical Game Detail runtime matches approved hierarchy and compiles',()=
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('v0.21.7 fallback independently mounts the approved Game Detail hierarchy',()=>{
+test('detail fallback independently mounts the approved Game Detail hierarchy',()=>{
   const base='<!doctype html><html><body><div id="app"><div class="detail"><header class="detail-head"><div class="detail-title">BUF @ HOU</div></header><main class="detail-content"></main></div></div></body></html>';
   const html=withV0217DetailGuard(base);
   assert.match(html,/data-canonical-game-detail/);
@@ -69,7 +69,7 @@ test('v0.21.7 fallback independently mounts the approved Game Detail hierarchy',
   scripts.forEach(s=>assert.doesNotThrow(()=>new Function(s)));
 });
 
-test('v0.21.7 primary refresh checks scores before refreshing the market',()=>{
+test('manual refresh checks scores before market and verifies final writes',()=>{
   const entry=readFileSync(new URL('../src/v0217-entry.js',import.meta.url),'utf8');
   assert.match(entry,/Refresh Game Data/);
   assert.match(entry,/scores:scores,market:b/);
@@ -77,6 +77,10 @@ test('v0.21.7 primary refresh checks scores before refreshing the market',()=>{
   assert.match(entry,/MANUAL_SCORE_REFRESH/);
   assert.match(entry,/fetchNflScores/);
   assert.match(entry,/ingestCompletedScores/);
+  assert.match(entry,/invalidateWeeklyOutlookCache/);
+  assert.match(entry,/providerSummary/);
+  assert.match(entry,/weekStatus/);
+  assert.match(entry,/finalizationVerified/);
 });
 
 test('final cards render status and scores directly and replace pregame edge with postgame stats',()=>{

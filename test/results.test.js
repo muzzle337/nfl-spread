@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { finalScoreUpdate, ingestCompletedScores } from "../src/results.js";
+import { finalScoreUpdate, ingestCompletedScores, ingestLiveScores } from "../src/results.js";
 
 test("finalScoreUpdate accepts only completed games with valid non-negative integer scores", () => {
   assert.deepEqual(finalScoreUpdate({
@@ -85,18 +85,39 @@ test("completed score ingestion stores final scores, COMPLETED status, and lates
   assert.deepEqual(db.updates[0], [27, 20, -3.5, "g1"]);
 });
 
-test("live scores are ignored so they cannot become final projection inputs", async () => {
-  const db = fakeDb();
-  const summary = await ingestCompletedScores(db, [{
+test("live score ingestion stores current scores as LIVE without making them final projection inputs", async () => {
+  const db = fakeDb({
+    existing: {
+      id: "g1",
+      status: "SCHEDULED",
+      away_score: null,
+      home_score: null,
+      closing_away_spread: null
+    }
+  });
+  const now = new Date("2026-09-13T20:00:00Z");
+  const summary = await ingestLiveScores(db, [{
+    id: "g1",
+    completed: false,
+    awayTeam: "Away",
+    homeTeam: "Home",
+    commenceTime: "2026-09-13T17:00:00Z",
+    awayScore: 14,
+    homeScore: 10
+  }], now);
+
+  assert.equal(summary.liveReceived, 1);
+  assert.equal(summary.gamesUpdated, 1);
+  assert.deepEqual(db.updates[0], [14, 10, "g1"]);
+
+  const finalSummary = await ingestCompletedScores(fakeDb(), [{
     id: "g1",
     completed: false,
     awayScore: 14,
     homeScore: 10
   }]);
-
-  assert.equal(summary.nonFinalIgnored, 1);
-  assert.equal(summary.gamesUpdated, 0);
-  assert.equal(db.updates.length, 0);
+  assert.equal(finalSummary.nonFinalIgnored, 1);
+  assert.equal(finalSummary.gamesUpdated, 0);
 });
 
 test("completed games that were never stored are skipped rather than creating spreadless history", async () => {

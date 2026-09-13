@@ -3,6 +3,7 @@ import { chromium } from '@playwright/test';
 const base = process.env.PROD_URL || 'https://nfl-spread-api.sanro4.workers.dev';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+const FINAL_EXPECTED_AFTER_MS = 4 * 60 * 60 * 1000;
 
 function fail(message) {
   throw new Error(message);
@@ -37,6 +38,19 @@ async function verifyFinalCard(away, home, awayScore, homeScore, resultText) {
   if (!text.includes(resultText)) fail(`${away}@${home}: expected postgame result ${resultText}`);
 }
 
+const dashboardResponse = await fetch(`${base}/api/dashboard/nfl`, { headers: { accept: 'application/json' } });
+if (!dashboardResponse.ok) fail(`Dashboard API failed: ${dashboardResponse.status}`);
+const dashboard = await dashboardResponse.json();
+const apiGames = Array.isArray(dashboard.games) ? dashboard.games : [];
+const now = Date.now();
+const overdue = apiGames.filter((game) => {
+  const kickoff = new Date(game.kickoffAt).getTime();
+  return Number.isFinite(kickoff) && now - kickoff >= FINAL_EXPECTED_AFTER_MS && !game.final;
+});
+if (overdue.length) {
+  fail(`Production has games >4h past kickoff still not FINAL: ${overdue.map((g) => `${g.awayTeam} @ ${g.homeTeam} (${g.kickoffAt}, status=${g.status ?? 'null'})`).join('; ')}`);
+}
+
 await page.goto(base, { waitUntil: 'networkidle', timeout: 60000 });
 await page.waitForSelector('.game-card', { timeout: 30000 });
 await page.waitForTimeout(1500);
@@ -44,10 +58,24 @@ await page.waitForTimeout(1500);
 await verifyFinalCard('NE', 'SEA', 10, 13, 'PUSH');
 await verifyFinalCard('SF', 'LAR', 27, 7, 'SF COVERED');
 
-const upcoming = await cardFor('NYJ', 'TEN');
-const upcomingStatus = (await upcoming.locator('.df21-game-status').innerText()).trim();
-if (upcomingStatus !== 'UPCOMING') fail(`NYJ@TEN: expected UPCOMING, got ${upcomingStatus}`);
-if (await upcoming.locator('.df21-team-score').count()) fail('NYJ@TEN: upcoming game should not show final score nodes');
+for (const game of apiGames) {
+  const awayCode = game.awayCode || game.awayTeam;
+  const homeCode = game.homeCode || game.homeTeam;
+  const card = await cardFor(awayCode, homeCode);
+  const status = (await card.locator('.df21-game-status').innerText()).trim();
+  if (game.final) {
+    if (status !== 'FINAL') fail(`${awayCode}@${homeCode}: API says final but rendered card says ${status}`);
+    const scores = await card.locator('.df21-team-score').allInnerTexts();
+    if (scores.length !== 2 || scores[0].trim() !== String(game.final.awayScore) || scores[1].trim() !== String(game.final.homeScore)) {
+      fail(`${awayCode}@${homeCode}: rendered scores do not match API final ${game.final.awayScore}-${game.final.homeScore}`);
+    }
+  } else {
+    const kickoff = new Date(game.kickoffAt).getTime();
+    if (Number.isFinite(kickoff) && now - kickoff >= FINAL_EXPECTED_AFTER_MS && status === 'UPCOMING') {
+      fail(`${awayCode}@${homeCode}: what the user sees is stale — game is >4h past kickoff but card still says UPCOMING`);
+    }
+  }
+}
 
 await page.screenshot({ path: 'production-card-check.png', fullPage: true });
 console.log('Rendered production card acceptance passed');
