@@ -32,16 +32,16 @@ jobs:
               data=json.loads(sys.argv[1])
           except Exception:
               raise SystemExit(1)
-          raise SystemExit(0 if data.get('version') == '0.21.7' else 1)
+          raise SystemExit(0 if data.get('version') == '0.21.8' else 1)
           PY
             then
-              echo "Production is serving v0.21.7"
+              echo "Production is serving v0.21.8"
               exit 0
             fi
             echo "Attempt $attempt: waiting for Cloudflare deployment..."
             sleep 20
           done
-          echo "Production never served v0.21.7"
+          echo "Production never served v0.21.8"
           exit 1
 
       - name: Verify real Week 1 finals, postgame stats, and live tiers
@@ -95,7 +95,7 @@ jobs:
           import json,os
           data=json.loads(os.environ['HEALTH'])
           required={
-              'version':'0.21.7',
+              'version':'0.21.8',
               'finalScoreProminent':True,
               'tierPercentVisibleOnCards':True,
               'gameCardStatusFirst':True,
@@ -107,6 +107,8 @@ jobs:
               'canonicalGameDetailRendered':True,
               'gameDetailVisualGate':True,
               'manualRefreshIncludesScores':True,
+              'manualScoreDiagnostics':True,
+              'manualScoreCacheInvalidation':True,
               'canonicalDetailFallback':True,
               'legacyRecurringPolling':False,
           }
