@@ -38,7 +38,7 @@ function signed(v){var n=num(v);return n===null?'—':n===0?'PK':(n>0?'+':'')+n}
 function pct(v){var n=num(v);if(n===null)return '—';return (Math.abs(n)<=1?Math.round(n*1000)/10:Math.round(n*10)/10)+'%'}
 function ml(v){var n=num(v);return n===null?'—':(n>0?'+':'')+Math.round(n)}
 function tier(t){return t==='LE_3'||t==='<=3'?'0.5–3':t==='LE_7'||t==='<=7'?'3.5–7':t==='GT_7'||t==='>7'?'7.5+':t==='PICK_EM'?'PK':t||'—'}
-function cls(v){return String(v||'').replace('AwayFavorite','Away Favorite').replace('HomeFavorite','Home Favorite').replace('AwayUnderdog','Away Dog').replace('HomeUnderdog','Home Dog').replace('AwayFav','Away Favorite').replace('HomeFav','Home Favorite')||'—'}
+function cls(v){var key=String(v||''),labels={AwayFavorite:'Away Favorite',AwayFav:'Away Favorite',AwayUnderdog:'Away Dog',AwayDog:'Away Dog',HomeFavorite:'Home Favorite',HomeFav:'Home Favorite',HomeUnderdog:'Home Dog',HomeDog:'Home Dog'};return labels[key]||key||'—'}
 function kickoff(v){if(!v)return 'Kickoff unavailable';var d=new Date(v);return d.toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
 function json(path,opt){return fetch(path,Object.assign({cache:'no-store',credentials:'same-origin',headers:{accept:'application/json'}},opt||{})).then(function(r){return r.json().catch(function(){return {error:'Invalid response'}}).then(function(b){if(!r.ok)throw new Error(b.message||b.error||'Request failed');return b})})}
 function q(path){return path+'?season='+encodeURIComponent(S.season)+'&week='+encodeURIComponent(S.week)}

@@ -143,8 +143,8 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
   await page.locator('[data-week-select]').selectOption('2');
   await page.locator('.bottom-nav [data-tab="picks"]').click();
   await expect(page.locator('[data-week-select]')).toHaveValue('2');
-  await expect(page.getByText('DEN')).toBeVisible();
-  await expect(page.getByText('KC')).toBeVisible();
+  await expect(page.getByText('DEN',{exact:true})).toBeVisible();
+  await expect(page.getByText('KC',{exact:true})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>({scrollX,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}))).toEqual({scrollX:0,overflow:0});
   await page.screenshot({path:'test-results/v022-picks.png',fullPage:true});
 });
@@ -157,7 +157,7 @@ test('Game Detail explains market, thesis, Brain, history and context',async({pa
   await expect(page.getByText('EXPERT READ')).toBeVisible();
   await expect(page.getByText('Brain',{exact:true})).toBeVisible();
   await expect(page.getByText('HISTORICAL EVIDENCE')).toBeVisible();
-  await expect(page.getByText('Rest edge')).toBeVisible();
+  await expect(page.locator('.evidence-item').filter({hasText:'Supports BUF · Rest edge'})).toBeVisible();
   const details=page.locator('.books details');
   await expect(details).not.toHaveAttribute('open','');
   await page.screenshot({path:'test-results/v022-game-detail.png',fullPage:true});
