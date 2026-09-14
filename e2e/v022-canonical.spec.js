@@ -86,6 +86,7 @@ test('Dashboard is a command center without the duplicated slate',async({page})=
   await expect(page.locator('.pulse-cell.hot')).toHaveCount(1);
   await expect(page.locator('.game-card')).toHaveCount(0);
   await expect(page.getByText('Survivor')).toHaveCount(0);
+  await page.screenshot({path:'test-results/v022-dashboard.png',fullPage:true});
 });
 
 test('Games owns the full slate and final result hierarchy',async({page})=>{
@@ -96,6 +97,7 @@ test('Games owns the full slate and final result hierarchy',async({page})=>{
   await expect(final).toContainText('27');
   await expect(final).toContainText('SF COVERED');
   await expect(final).not.toContainText('UPCOMING');
+  await page.screenshot({path:'test-results/v022-games.png',fullPage:true});
 });
 
 test('Picks keeps completed history and advances by explicit week control',async({page})=>{
@@ -106,6 +108,7 @@ test('Picks keeps completed history and advances by explicit week control',async
   await expect(page.locator('.week-nav strong')).toHaveText('WEEK 2');
   await expect(page.getByText('DEN')).toBeVisible();
   await expect(page.getByText('KC')).toBeVisible();
+  await page.screenshot({path:'test-results/v022-picks.png',fullPage:true});
 });
 
 test('Game Detail emphasizes the final spread result and collapses books',async({page})=>{
@@ -116,4 +119,5 @@ test('Game Detail emphasizes the final spread result and collapses books',async(
   await expect(page.getByText('ORIGINAL THESIS')).toBeVisible();
   const details=page.locator('.books details');
   await expect(details).not.toHaveAttribute('open','');
+  await page.screenshot({path:'test-results/v022-game-detail.png',fullPage:true});
 });
