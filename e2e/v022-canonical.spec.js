@@ -108,6 +108,7 @@ test('Picks keeps completed history and advances by explicit week control',async
   await expect(page.locator('.week-nav strong')).toHaveText('WEEK 2');
   await expect(page.getByText('DEN')).toBeVisible();
   await expect(page.getByText('KC')).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>({scrollX,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}))).toEqual({scrollX:0,overflow:0});
   await page.screenshot({path:'test-results/v022-picks.png',fullPage:true});
 });
 
