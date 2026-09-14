@@ -99,7 +99,7 @@ test('Games owns the full slate and final result hierarchy',async({page})=>{
 });
 
 test('Picks keeps completed history and advances by explicit week control',async({page})=>{
-  await page.getByRole('button',{name:/Picks/}).click();
+  await page.locator('.bottom-nav [data-tab="picks"]').click();
   await expect(page.getByText('WEEK 1 · FINAL')).toBeVisible();
   await expect(page.getByText('CORRECT')).toBeVisible();
   await page.locator('[data-week="1"]').click();
