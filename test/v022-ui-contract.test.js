@@ -25,10 +25,20 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.equal(scripts.length,1);
   scripts.forEach(script=>assert.doesNotThrow(()=>new Function(script)));
 
-  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+focus\(\)\+pickSummary\(\)/);
+  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
   assert.match(html,/function games\(\).*gamesSection\(\)/);
   assert.match(html,/function picks\(\)/);
-  assert.match(html,/data-week/);
+  assert.match(html,/data-week-select/);
+  assert.match(html,/data-bucket/);
+  assert.match(html,/Focus This Week/);
+  assert.match(html,/Current Market/);
+  assert.match(html,/Historical Evidence/);
+  assert.match(html,/Expert Read/);
+  assert.match(html,/Strategy/);
+  assert.match(html,/Brain/);
+  assert.match(html,/Context/);
+  assert.match(html,/ML /);
+  assert.match(html,/Open .+ → /);
   assert.match(html,/FINAL SPREAD RESULT/);
   assert.match(html,/Spread Result/);
   assert.match(html,/<details><summary>Sportsbooks/);
@@ -39,11 +49,22 @@ test('canonical shell uses approved APIs without recurring background refresh',(
   const html=canonicalAppPage();
   assert.match(html,/\/api\/dashboard\/nfl/);
   assert.match(html,/\/api\/focus\/opportunities/);
-  assert.match(html,/\/api\/pool\/outlooks\?season=/);
+  assert.match(html,/q\('\/api\/pool\/outlooks'\)/);
+  assert.match(html,/q\('\/api\/dashboard\/nfl'\)/);
+  assert.match(html,/q\('\/api\/focus\/opportunities'\)/);
   assert.match(html,/\/api\/data\/freshness/);
   assert.match(html,/\/api\/ingest\/nfl\/results/);
   assert.match(html,/\/api\/ingest\/nfl/);
   assert.doesNotMatch(html,/setTimeout\([^)]*load|setInterval/);
+});
+
+test('Dashboard route honors an explicitly selected schedule week',()=>{
+  const entry=readFileSync(new URL('../src/v022-entry.js',import.meta.url),'utf8');
+  const data=readFileSync(new URL('../src/dashboard-data.js',import.meta.url),'utf8');
+  assert.match(entry,/dashboardSnapshot\(env\.DB,new Date\(\),target\)/);
+  assert.match(data,/dashboardSnapshot\(db, now = new Date\(\), selected = null\)/);
+  assert.match(data,/requestedSeason/);
+  assert.match(data,/requestedWeek/);
 });
 
 test('active worker entry bypasses the legacy HTML injection chain',()=>{

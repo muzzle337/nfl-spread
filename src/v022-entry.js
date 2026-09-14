@@ -389,7 +389,10 @@ async function stabilityRoute(request,env,url){
 async function coreDataRoute(request,env,url){
   if(url.pathname==='/api/dashboard/nfl'&&request.method==='GET'){
     if(!env.DB)return json({error:'Database is not bound'},503);
-    try{return json({ok:true,...await dashboardSnapshot(env.DB,new Date())})}
+    try{
+      const target=await targetWeek(env,url);
+      return json({ok:true,...await dashboardSnapshot(env.DB,new Date(),target)});
+    }
     catch(error){return json({error:'Dashboard data unavailable',message:error.message},503)}
   }
 

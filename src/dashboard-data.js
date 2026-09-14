@@ -93,8 +93,12 @@ export async function resolveDashboardWeek(db) {
   return { season, week: (active ?? weeks[weeks.length - 1]).week };
 }
 
-export async function dashboardSnapshot(db, now = new Date()) {
-  const target = await resolveDashboardWeek(db);
+export async function dashboardSnapshot(db, now = new Date(), selected = null) {
+  const requestedSeason = Number(selected?.season);
+  const requestedWeek = Number(selected?.week);
+  const target = Number.isInteger(requestedSeason) && Number.isInteger(requestedWeek) && requestedWeek > 0
+    ? { season: requestedSeason, week: requestedWeek }
+    : await resolveDashboardWeek(db);
   if (target.season === null || target.week === null) {
     return {
       season: target.season,

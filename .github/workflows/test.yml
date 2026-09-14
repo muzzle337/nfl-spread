@@ -31,6 +31,8 @@ jobs:
           name: v022-canonical-screens
           path: |
             test-results/v022-dashboard.png
+            test-results/v022-tier-filter.png
+            test-results/v022-week2.png
             test-results/v022-games.png
             test-results/v022-picks.png
             test-results/v022-game-detail.png
