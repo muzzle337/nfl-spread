@@ -317,7 +317,7 @@ async function cacheRoute(request,env,url){
   if(!url.pathname.startsWith('/api/cache/'))return null;
   if(!env.DB)return json({error:'Database is not bound'},503);
   if(url.pathname==='/api/cache/status'&&request.method==='GET'){
-    try{return json({ok:true,...await d1CacheStatus(env.DB,Number(url.searchParams.get('season')),Number(url.searchParams.get('week')))}}
+    try{return json({ok:true,...await d1CacheStatus(env.DB,Number(url.searchParams.get('season')),Number(url.searchParams.get('week')))})}
     catch(error){return json({error:'Cache status unavailable',message:error.message},400)}
   }
   if(url.pathname==='/api/cache/history/rebuild'&&request.method==='POST'){
