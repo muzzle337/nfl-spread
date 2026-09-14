@@ -6,11 +6,11 @@ import { withCanonicalGameDetail } from '../src/canonical-game-detail.js';
 import { withV0217DetailGuard } from '../src/v0217-detail-guard.js';
 import { APP_VERSION } from '../src/v0217-entry.js';
 
-test('v0.21.8 is the production entry and package version',()=>{
+test('v0.22 uses the canonical entry while retaining the v0.21.8 score fix',()=>{
   const wrangler=readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8');
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
   assert.equal(APP_VERSION,'0.21.8');
-  assert.equal(pkg.version,'0.21.8');
+  assert.equal(pkg.version,'0.22.0');
   assert.match(wrangler,/src\/v0217-entry\.js/);
 });
 
