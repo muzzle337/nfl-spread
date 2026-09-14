@@ -37,6 +37,7 @@ function dashboard(week){
   const games=week===2?[projectedGame({
     id:'g3',week:2,awayTeam:'Denver Broncos',homeTeam:'Kansas City Chiefs',kickoffAt:'2026-09-20T20:25:00Z',
     medianAwaySpread:2,medianHomeSpread:-2,classification:{away:'AwayDog',home:'HomeFav',tier:'<=3'},
+    moneyline:{consensusAwayMoneyline:110,consensusHomeMoneyline:-125,awayWinProbability:.46,homeWinProbability:.54,books:[]},
     projectedTeam:'Kansas City Chiefs',projectedClassification:'HomeFav',projectedCoverRate:66.7,sampleSize:3,grade:'B',
     currentSeasonStats:{away:{wins:1,losses:2,pushes:0,decisions:3,coverRate:33.3},home:{wins:2,losses:1,pushes:0,decisions:3,coverRate:66.7}}
   })]:[finalGame,projectedGame()];
