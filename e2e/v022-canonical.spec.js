@@ -70,6 +70,8 @@ function outlookGame(g){
 
 function pool(week){
   const games=dashboard(week).games.map(outlookGame);
+  const cached=games.find(game=>game.gameId==='g2');
+  if(cached)cached.spread.sampleSize=0;
   return {ok:true,season:2026,week,summary:{correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)},games};
 }
 
