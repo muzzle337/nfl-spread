@@ -114,5 +114,5 @@ test("public worker serves PWA assets and reports synchronized 0.9.0 version", a
 
 test("Cloudflare deploys the v0.22 canonical worker entrypoint", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(config, /"main"\\s*:\\s*"src\\/v022-entry\\.js"/);
+  assert.match(config, /"main"\s*:\s*"src\/v022-entry\.js"/);
 });
