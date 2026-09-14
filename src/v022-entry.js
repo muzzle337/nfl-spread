@@ -1,11 +1,11 @@
-import coreApp from './index.js';
 import {
   adminSessionCookie,
   clearAdminSessionCookie,
   createAdminSession,
   isAdminSessionAuthorized
 } from './admin-session.js';
-import { resolveDashboardWeek } from './dashboard-data.js';
+import { dashboardSnapshot, resolveDashboardWeek } from './dashboard-data.js';
+import { consensusLinesForWeek } from './consensus.js';
 import { dataFreshness } from './data-freshness.js';
 import { d1CacheStatus, rebuildStoredHistoricalSummaries } from './d1-usage.js';
 import { contextForWeek, syncContext } from './context.js';
@@ -17,10 +17,12 @@ import { ingestWeeklySpreads } from './ingestion.js';
 import { lineMovementForGame, lineMovementsForWeek } from './line-movement.js';
 import { fetchNflMarkets, fetchNflScores } from './odds.js';
 import { rankOpportunities } from './opportunity-focus.js';
+import { classifyGame, focusGrade, settleAgainstSpread } from './engine.js';
+import { projectionsForWeek } from './projection.js';
 import { iconPng, manifestData, serviceWorkerScript } from './pwa.js';
 import { ingestCompletedScores, ingestLiveScores } from './results.js';
-import { FINAL_GRACE_HOURS, syncResultsIfDue, weekResultsStatus } from './result-sync.js';
-import { SPREAD_REFRESH_CRON } from './spread-sync.js';
+import { FINAL_GRACE_HOURS, resultsIntegrity, syncResultsIfDue, weekResultsStatus } from './result-sync.js';
+import { SPREAD_REFRESH_CRON, spreadRefreshStatus, syncSpreadsIfDue } from './spread-sync.js';
 import {
   invalidateWeeklyOutlookCache,
   poolSeasonSummary,
@@ -68,6 +70,24 @@ async function logApiUsage(env,{requestType,quota,triggerType='manual',success=t
     await env.DB.prepare('INSERT INTO api_usage(provider,request_type,credits_used,credits_remaining,trigger_type,success) VALUES(?,?,?,?,?,?)')
       .bind('the-odds-api',requestType,quota?.creditsUsedThisRequest??0,quota?.creditsRemaining??null,triggerType,success?1:0).run();
   }catch(error){console.error('API usage logging failed',error)}
+}
+
+async function usageSummary(env){
+  if(!env.DB)throw new Error('Database is not bound');
+  const [totals,latest,byType]=await Promise.all([
+    env.DB.prepare("SELECT COALESCE(SUM(credits_used),0) AS tracked_credits, COUNT(*) AS requests, COALESCE(SUM(CASE WHEN success=0 THEN 1 ELSE 0 END),0) AS failed_requests FROM api_usage WHERE requested_at >= datetime('now','start of month')").first(),
+    env.DB.prepare('SELECT credits_remaining, requested_at FROM api_usage WHERE credits_remaining IS NOT NULL ORDER BY id DESC LIMIT 1').first(),
+    env.DB.prepare("SELECT request_type, COUNT(*) AS requests, COALESCE(SUM(credits_used),0) AS credits FROM api_usage WHERE requested_at >= datetime('now','start of month') GROUP BY request_type ORDER BY credits DESC, request_type ASC").all()
+  ]);
+  return {
+    month:new Date().toISOString().slice(0,7),
+    requests:Number(totals?.requests??0),
+    trackedCredits:Number(totals?.tracked_credits??0),
+    failedRequests:Number(totals?.failed_requests??0),
+    creditsRemaining:latest?.credits_remaining??null,
+    remainingAsOf:latest?.requested_at??null,
+    byType:byType.results??[]
+  };
 }
 
 async function targetWeek(env,url){
@@ -366,6 +386,65 @@ async function stabilityRoute(request,env,url){
   return json({ok:checks.every(x=>x.ok),version:APP_VERSION,checks,deferredHeavyContracts:['/api/context/opportunities','/api/history/matchups','/api/pool/outlooks'],principle:'Diagnostics stay lightweight and do not trigger historical calculations.'});
 }
 
+async function coreDataRoute(request,env,url){
+  if(url.pathname==='/api/dashboard/nfl'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    try{return json({ok:true,...await dashboardSnapshot(env.DB,new Date())})}
+    catch(error){return json({error:'Dashboard data unavailable',message:error.message},503)}
+  }
+
+  if(url.pathname==='/api/spreads/status'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    try{return json({ok:true,...await spreadRefreshStatus(env.DB,new Date())})}
+    catch(error){return json({error:'Spread refresh status unavailable',message:error.message},400)}
+  }
+
+  if(url.pathname==='/api/engine/demo'&&request.method==='GET'){
+    return json({
+      classification:classifyGame(-3.5,3.5),
+      settlement:settleAgainstSpread({awaySpread:-3.5,homeSpread:3.5,awayScore:24,homeScore:17}),
+      grade:focusGrade(64)
+    });
+  }
+
+  if(url.pathname==='/api/consensus/nfl'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=url.searchParams.get('season'),week=url.searchParams.get('week');
+    if(!season||!week)return json({error:'season and week are required'},400);
+    try{return json({ok:true,...await consensusLinesForWeek(env.DB,season,week)})}
+    catch(error){return json({error:'Consensus lines unavailable',message:error.message},400)}
+  }
+
+  if(url.pathname==='/api/projections/nfl'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=url.searchParams.get('season'),week=url.searchParams.get('week');
+    if(!season||!week)return json({error:'season and week are required'},400);
+    try{return json({ok:true,...await projectionsForWeek(env.DB,season,week)})}
+    catch(error){return json({error:'Projection data unavailable',message:error.message},400)}
+  }
+
+  if(url.pathname==='/api/results/status'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=url.searchParams.get('season'),week=url.searchParams.get('week');
+    if(!season||!week)return json({error:'season and week are required'},400);
+    try{return json({ok:true,...await weekResultsStatus(env.DB,season,week,new Date())})}
+    catch(error){return json({error:'Results status unavailable',message:error.message},400)}
+  }
+
+  if(url.pathname==='/api/results/integrity'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    try{return json({ok:true,...await resultsIntegrity(env.DB,new Date())})}
+    catch(error){return json({error:'Results integrity unavailable',message:error.message},400)}
+  }
+
+  if(url.pathname==='/api/usage'&&request.method==='GET'){
+    try{return json({ok:true,...await usageSummary(env)})}
+    catch(error){return json({error:'Usage data unavailable',message:error.message},503)}
+  }
+
+  return null;
+}
+
 async function healthRoute(env){
   let database='unbound';
   if(env.DB){
@@ -424,7 +503,7 @@ function recoveryResponse(request){
 }
 
 function serviceWorker(){
-  const script=serviceWorkerScript().replace('0.7.0',APP_VERSION);
+  const script=serviceWorkerScript(APP_VERSION);
   return script+"\nself.addEventListener('message',function(event){if(!event.data||event.data.type!=='GET_VERSION')return;var payload={type:'VERSION',version:'"+APP_VERSION+"'};if(event.ports&&event.ports[0])event.ports[0].postMessage(payload);else if(event.source&&event.source.postMessage)event.source.postMessage(payload)});";
 }
 
@@ -455,6 +534,7 @@ export default{
     const url=new URL(request.url);
 
     if(request.method==='GET'&&(url.pathname==='/'||url.pathname==='/app'))return html(canonicalAppPage());
+    if(request.method==='GET'&&url.pathname==='/admin/ingest')return new Response(null,{status:302,headers:{location:'/?tab=tools','cache-control':'no-store'}});
     if(request.method==='GET'&&url.pathname==='/recover')return recoveryResponse(request);
     if(request.method==='GET'&&url.pathname==='/manifest.webmanifest')return text(JSON.stringify(manifestData()),'application/manifest+json; charset=utf-8',{'cache-control':'no-cache'});
     if(request.method==='GET'&&url.pathname==='/sw.js')return text(serviceWorker(),'application/javascript; charset=utf-8',{'cache-control':'no-cache, no-store, must-revalidate','service-worker-allowed':'/'});
@@ -464,6 +544,7 @@ export default{
     if(url.pathname==='/api/health')return healthRoute(env);
 
     const routes=[
+      coreDataRoute,
       adminSessionRoute,
       manualResultsRoute,
       marketRoute,
@@ -484,14 +565,41 @@ export default{
 
     if(url.pathname.startsWith('/api/survivor'))return json({error:'Survivor is inactive in v0.22'},410);
 
-    return coreApp.fetch(request,env,ctx);
+    return json({error:'Not found'},404);
   },
 
   scheduled(controller,env,ctx){
-    coreApp.scheduled(controller,env,ctx);
-    if((controller.cron??'')===SPREAD_REFRESH_CRON){
-      const now=new Date(controller.scheduledTime??Date.now());
-      ctx.waitUntil(hourlyResultSync(env,now).catch(error=>console.error('Hourly result sync failed',error)));
-    }
+    const cron=controller.cron??'',now=new Date(controller.scheduledTime??Date.now());
+    ctx.waitUntil((async()=>{
+      if(!env.DB){console.error('Scheduled sync skipped: DB is not configured');return}
+      if(cron===SPREAD_REFRESH_CRON){
+        await Promise.all([
+          (async()=>{
+            try{
+              const spread=await syncSpreadsIfDue({db:env.DB,apiKey:env.ODDS_API_KEY,now});
+              if(spread.apiCalled)await logApiUsage(env,{requestType:'nfl_auto_spreads',quota:spread.quota,triggerType:'scheduled_auto',success:true});
+            }catch(error){
+              if(error.quota)await logApiUsage(env,{requestType:'nfl_auto_spreads',quota:error.quota,triggerType:'scheduled_auto',success:false});
+              console.error('Hourly spread sync failed',error);
+            }
+          })(),
+          hourlyResultSync(env,now).catch(error=>console.error('Hourly result sync failed',error))
+        ]);
+        return;
+      }
+      if(cron===RESULTS_REFRESH_CRON){
+        if(!env.ODDS_API_KEY){console.error('Scheduled result sync skipped: ODDS_API_KEY is not configured');return}
+        try{
+          const result=await syncResultsIfDue({db:env.DB,apiKey:env.ODDS_API_KEY,now});
+          if(result.apiCalled)await logApiUsage(env,{requestType:'nfl_results',quota:result.quota,triggerType:'scheduled_daily',success:true});
+          await invalidateIfFinalChanged(env,result);
+        }catch(error){
+          if(error.quota)await logApiUsage(env,{requestType:'nfl_results',quota:error.quota,triggerType:'scheduled_daily',success:false});
+          console.error('Scheduled result sync failed',error);
+        }
+        return;
+      }
+      console.error('Scheduled sync skipped: unrecognized cron',cron);
+    })());
   }
 };

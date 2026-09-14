@@ -1,8 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker from "../src/pwa-entry.js";
+import worker from "../src/v022-entry.js";
 import { lineMovementForGame, summarizeLineMovement } from "../src/line-movement.js";
-import { withLineMovementUi } from "../src/line-movement-ui.js";
 
 const game = {
   id: "g1",
@@ -103,13 +102,4 @@ test("public movement endpoint is D1-only and returns the stored summary", async
   assert.equal(body.movement.firstCapturedAwaySpread, 3.5);
   assert.equal(body.movement.currentAwaySpread, 4);
   assert.equal(response.headers.get("cache-control"), "no-store");
-});
-
-test("line movement UI explains that first captured is not guaranteed sportsbook opening", () => {
-  const page = withLineMovementUi("<!doctype html><html><head></head><body><div id=\"app\"></div></body></html>");
-  assert.match(page, /Line Movement/);
-  assert.match(page, /First Captured/);
-  assert.match(page, /not guaranteed to be the sportsbook opening line/);
-  assert.match(page, /\/api\/lines\/movement\?game=/);
-  assert.match(page, /Moved/);
 });

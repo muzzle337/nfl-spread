@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
@@ -54,9 +54,18 @@ test('active worker entry bypasses the legacy HTML injection chain',()=>{
   assert.match(entry,/legacyUiInjection:false/);
   assert.doesNotMatch(entry,/withMoneylineSurvivorUi|withGameOutlookPicksUi|withV021Ui|withCanonicalGameDetail|upgradeHtml/);
   assert.doesNotMatch(entry,/from ['"]\.\/v0(?:10|11|12|13|14|15|16|17|18|19|20|21)/);
-  assert.match(entry,/import coreApp from '\.\/index\.js'/);
+  assert.doesNotMatch(entry,/from ['"]\.\/index\.js|coreApp/);
+  assert.match(entry,/Promise\.all\(\[\s*\(async\(\)=>\{[\s\S]*hourlyResultSync\(env,now\)\.catch/);
   assert.match(entry,/canonicalBackendRouter:true/);
   assert.match(entry,/legacyEntryDelegation:false/);
+});
+
+test('retired wrappers and injected renderers are absent from the source tree',()=>{
+  const files=readdirSync(new URL('../src/',import.meta.url)).filter(name=>name.endsWith('.js'));
+  assert.deepEqual(files.filter(name=>/^v0(?:1[0-9]|20|21|217)-entry\.js$/.test(name)),[]);
+  assert.deepEqual(files.filter(name=>/(?:-ui|detail-guard|pwa-entry|^index|^dashboard|^help|^survivor)/.test(name)),['dashboard-data.js','v022-ui.js']);
+  const runtime=files.map(name=>readFileSync(new URL('../src/'+name,import.meta.url),'utf8')).join('\n');
+  assert.doesNotMatch(runtime,/MutationObserver|setInterval|survivor_future_markets|storeFutureSurvivorMarkets/);
 });
 
 test('canonical backend reports its contract and deactivates Survivor routes',async()=>{
@@ -83,4 +92,11 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
   assert.match(script,/VERSION = "0\.22\.0"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
+});
+
+test('retired admin URL opens the canonical Tools screen',async()=>{
+  const response=await worker.fetch(new Request('https://example.com/admin/ingest'),{});
+  assert.equal(response.status,302);
+  assert.equal(response.headers.get('location'),'/?tab=tools');
+  assert.match(canonicalAppPage(),/new URLSearchParams\(location\.search\)/);
 });
