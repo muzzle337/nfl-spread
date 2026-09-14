@@ -11,7 +11,7 @@ test('v0.22 uses the canonical entry while retaining the v0.21.8 score fix',()=>
   const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
   assert.equal(APP_VERSION,'0.21.8');
   assert.equal(pkg.version,'0.22.0');
-  assert.match(wrangler,/src\/v0217-entry\.js/);
+  assert.match(wrangler,/src\/v022-entry\.js/);
 });
 
 test('freshness contract never reads raw historical games',()=>{
