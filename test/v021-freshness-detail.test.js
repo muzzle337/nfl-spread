@@ -88,7 +88,7 @@ test('final cards render status and scores directly and replace pregame edge wit
   const data=readFileSync(new URL('../src/dashboard-data.js',import.meta.url),'utf8');
   assert.match(entry,/df21-game-status/);
   assert.match(entry,/df21-team-score/);
-  assert.match(entry,/game\.final\?'FINAL':(game.live?'LIVE':'UPCOMING')/);
+  assert.match(entry,/game\.final\?'FINAL':\(game\.live\?'LIVE':'UPCOMING'\)/);
   assert.match(entry,/FINAL SPREAD RESULT/);
   assert.doesNotMatch(entry,/PREGAME TIER EDGE/);
   assert.match(entry,/post\.spreadResult==='PUSH'/);
