@@ -93,8 +93,12 @@ export async function resolveDashboardWeek(db) {
   return { season, week: (active ?? weeks[weeks.length - 1]).week };
 }
 
-export async function dashboardSnapshot(db, now = new Date()) {
-  const target = await resolveDashboardWeek(db);
+export async function dashboardSnapshot(db, now = new Date(), selected = null) {
+  const requestedSeason = Number(selected?.season);
+  const requestedWeek = Number(selected?.week);
+  const target = Number.isInteger(requestedSeason) && Number.isInteger(requestedWeek) && requestedWeek > 0
+    ? { season: requestedSeason, week: requestedWeek }
+    : await resolveDashboardWeek(db);
   if (target.season === null || target.week === null) {
     return {
       season: target.season,
@@ -115,11 +119,17 @@ export async function dashboardSnapshot(db, now = new Date()) {
   const games = (projection.games ?? []).map((game) => {
     const result = resultById.get(String(game.id));
     const isFinal = Boolean(result?.final);
-    const final = isFinal ? { awayScore: Number(result.awayScore), homeScore: Number(result.homeScore) } : null;
+    const awayScore = finiteNumber(result?.awayScore);
+    const homeScore = finiteNumber(result?.homeScore);
+    const final = isFinal ? { awayScore, homeScore } : null;
+    const live = !isFinal && result?.status === "LIVE" && awayScore !== null && homeScore !== null
+      ? { awayScore, homeScore }
+      : null;
     return {
       ...game,
       status: result?.status ?? game.status ?? null,
       final,
+      live,
       postgame: postgameAnalysis(game, final, projection.liveWeekStats)
     };
   });

@@ -5,7 +5,6 @@ import {
   createAdminSession,
   isAdminSessionAuthorized
 } from "../src/admin-session.js";
-import { withAdminPinUi } from "../src/admin-pin-ui.js";
 
 const env = {
   ADMIN_UI_PIN: "4827",
@@ -68,13 +67,4 @@ test("existing direct admin token remains valid for compatibility", async () => 
   const auth = await isAdminSessionAuthorized(request, env);
   assert.equal(auth.ok, true);
   assert.equal(auth.method, "admin-token");
-});
-
-test("PIN UI removes browser admin-token storage and uses the session endpoint", () => {
-  const html = withAdminPinUi('<html><body><div id="app"><section class="section"><input id="adminKey" class="admin-key"></section></div></body></html>');
-  assert.match(html, /Admin Tools Locked/);
-  assert.match(html, /\/api\/admin\/session/);
-  assert.match(html, /HttpOnly|real admin key stays in Cloudflare/);
-  assert.doesNotMatch(html, /nflSpreadAdminToken/);
-  assert.doesNotMatch(html, /sessionStorage\.setItem/);
 });

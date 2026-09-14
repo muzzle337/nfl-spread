@@ -16,6 +16,12 @@ test("NFL market request asks for spreads and h2h in one US-region call", () => 
   assert.equal(url.searchParams.get("oddsFormat"), "american");
 });
 
+test("selected-week market request is bounded by stored kickoff dates", () => {
+  const url = buildNflMarketsUrl("secret", { commenceTimeFrom:"2026-09-17T18:00:00Z", commenceTimeTo:"2026-09-22T06:00:00Z" });
+  assert.equal(url.searchParams.get("commenceTimeFrom"), "2026-09-17T18:00:00.000Z");
+  assert.equal(url.searchParams.get("commenceTimeTo"), "2026-09-22T06:00:00.000Z");
+});
+
 test("market normalization keeps spread and moneyline separate", () => {
   const [game] = normalizeNflMarkets([{
     id: "g1",

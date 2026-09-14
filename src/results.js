@@ -22,6 +22,20 @@ export function finalScoreUpdate(game) {
   };
 }
 
+function scoreStateUpdate(game) {
+  const awayScore = validFinalScore(game?.awayScore);
+  const homeScore = validFinalScore(game?.homeScore);
+  if (awayScore === null || homeScore === null) return null;
+  return {
+    id: game?.id ?? null,
+    awayTeam: game?.awayTeam ?? null,
+    homeTeam: game?.homeTeam ?? null,
+    commenceTime: game?.commenceTime ?? null,
+    awayScore,
+    homeScore
+  };
+}
+
 async function latestConsensusAwaySpread(db, gameId) {
   const result = await db.prepare(`
     SELECT away_spread
@@ -74,6 +88,69 @@ async function storedGameForScore(db, update) {
       `).bind(update.awayTeam, update.homeTeam).first();
 
   return { row: fallback ?? null, matchedBy: fallback ? "teams_kickoff" : null };
+}
+
+export async function ingestLiveScores(db, scoreGames, now = new Date()) {
+  if (!db) throw new Error("Database is not bound");
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  let liveReceived = 0;
+  let gamesUpdated = 0;
+  let gamesUnchanged = 0;
+  let gamesNotStored = 0;
+  let gamesInvalid = 0;
+  let futureIgnored = 0;
+  let completedIgnored = 0;
+
+  for (const game of Array.isArray(scoreGames) ? scoreGames : []) {
+    if (game?.completed === true) {
+      completedIgnored += 1;
+      continue;
+    }
+    const update = scoreStateUpdate(game);
+    if (!update) {
+      gamesInvalid += 1;
+      continue;
+    }
+    const kickoffMs = new Date(update.commenceTime).getTime();
+    if (!Number.isFinite(kickoffMs) || kickoffMs > nowMs) {
+      futureIgnored += 1;
+      continue;
+    }
+    liveReceived += 1;
+    const match = await storedGameForScore(db, update);
+    const existing = match.row;
+    if (!existing) {
+      gamesNotStored += 1;
+      continue;
+    }
+    if (existing.status === "COMPLETED") {
+      gamesUnchanged += 1;
+      continue;
+    }
+    const sameScores = Number(existing.away_score) === update.awayScore
+      && Number(existing.home_score) === update.homeScore;
+    if (sameScores && existing.status === "LIVE") {
+      gamesUnchanged += 1;
+      continue;
+    }
+    await db.prepare(`
+      UPDATE games
+      SET away_score = ?, home_score = ?, status = 'LIVE', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status <> 'COMPLETED'
+    `).bind(update.awayScore, update.homeScore, existing.id).run();
+    gamesUpdated += 1;
+  }
+
+  return {
+    scoreEventsReceived: Array.isArray(scoreGames) ? scoreGames.length : 0,
+    liveReceived,
+    gamesUpdated,
+    gamesUnchanged,
+    gamesNotStored,
+    gamesInvalid,
+    futureIgnored,
+    completedIgnored
+  };
 }
 
 export async function ingestCompletedScores(db, scoreGames) {

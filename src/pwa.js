@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.7.0";
+const DEFAULT_ASSET_VERSION = "0.7.0";
 
 const ICONS = {
   192: "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAAEB0lEQVR42u3dMU4bQRSAYXu0DQUNtJEiRRQ5BKl8AjpqGg7AOTgATep0nIAKDpECRYqUlhukSGHJssB2jJnZnZn3/ZUjDNjrL2/GNrbnR8cnM+nQkkMggASQABJAEkACSAAJIAkgASSABJAEkAASQOqmoZ6Lsrh7cXvs38P1aQ0XYz7tXyRC0zqmaQBx042kUQHtdvN0c0bA/p3fPtcgaTxAG/VAUw7TOIbGAPSWDjejSSrNqDigV3rQGZ9RUUMFAaETgVGip9deHfNC93yLTKD1y4pOVaMo+xxK9IQaRdnnUKKHoVoA0RPQUKKHobr2QPQ0dNesFkArzvQ0ZCjLEEoZ9ai5Pn7bpRK0FWchS7kI0xNzIUtZ9CjsQpbycla0hcyrMjQRILsfOyETSJYwtQjI+mUVM4FkCRNACgfIBsg2yASSJUwACSABJAEkgASQAJIAEkACSABJAAkgASSAJIAEkAASQBJAAkgACSABJAGkMRv6vnp/fv087Bs/ffla7kcB1KGYQj/n7Y/qzNNAzLQXuHVPAzeVXJFGJQ3oVHW9mmM0oINR/4Ai0GmUUaLHFe8ZUFg9rVz95PAx1OEeCJ1WtkSeC1N3gIyfhg5LcpgYsoQJIOOnzUOUHJpll/fD5f2w4/S2MwQ3ZAkTQAJIACliQ7QrvHvzu/7Vjae3nWHVj4u/JpAEkCxhJdq2xCzXo+VXN57edgYTSAJIAKnF5kfHJ+/9nnKfG+/J1H0q8aeJ57fPyxMP16cNT6C+34egy0NkCVNfgAyhtg5OcpjosYRpsoaa/7e5U1b/SE4OHD09L2HBDdV/9ZOD6Ip3uAcKviXyBlMYRRm3Q6OHuD9G3mRzmsPduiRv81vXDVC/J280HsKTjzoICqjcjedRzY15LkwACSABJIAkgASQABJAEkACSAAJIAmg2ezqcXH1uHDDAySABJAAkgASQAJIAEkAabT6fF3Yfx9r3nGG798e9vwtv+8Pf6XY54tOXttvAskEes8UWc6e/cdMhCliAgkgxQG0+jyO1Sd0qOkO/qQVE0iWMAGkcIBsg2yAloX71OYsjwDJEqapAVnFrF8mkOpYwgyhpsfPZIAOnnuqqo/cjinX7zaEou1+8u+BGAq1eGUDZCGLuXjlnEAWsoCLV6m78QwFWbwyA1rnzFD9enJtPHJOIIai6cm/hDEUSk+RPRBDcfTMZrP50fFJiQu9uHtZ/+fTzZkbcvItc4kHXEo9mfrqshpFXeopOIGMou7pjATorSGMRqMzK/88wRiAtjEiqZyb2VhPMY0HaJshmDKiGVnP2ID2lKRc9126BURS625qAQRTi2gqBaQW86oMASSABJAAkgASQAJIAEkACSABJIAkgASQquofQfqhhbbRWCoAAAAASUVORK5CYII=",
@@ -38,8 +38,8 @@ export function manifestData() {
   };
 }
 
-export function serviceWorkerScript() {
-  return `const VERSION = "${APP_VERSION}";
+export function serviceWorkerScript(version = DEFAULT_ASSET_VERSION) {
+  return `const VERSION = "${version}";
 const CACHE_NAME = "nfl-spread-shell-" + VERSION;
 const SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
@@ -95,70 +95,4 @@ self.addEventListener("fetch", (event) => {
     })());
   }
 });`;
-}
-
-export function withPwa(html) {
-  if (typeof html !== "string") return html;
-
-  const head = `
-  <link rel="manifest" href="/manifest.webmanifest?v=${APP_VERSION}" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=${APP_VERSION}" />
-  <meta name="application-name" content="NFL Spread Tool" />
-  <meta name="apple-mobile-web-app-title" content="NFL Spread" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <style>
-    .pwa-version-info { margin: 18px 2px 2px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); text-align: center; color: #6f7f90; font-size: 10px; line-height: 1.45; }
-    .pwa-version-info strong { color: #9eb0c2; font-weight: 750; }
-    .pwa-version-warning { color: #f1c84b; }
-  </style>`;
-
-  const script = `
-  <script>
-    (function () {
-      var APP_VERSION = '${APP_VERSION}';
-      var apiVersion = null;
-      var healthFailed = false;
-      var appRoot = document.getElementById('app');
-
-      function versionMarkup() {
-        var api = apiVersion || (healthFailed ? 'unavailable' : 'checking…');
-        var mismatch = apiVersion && apiVersion !== APP_VERSION;
-        return '<div id="pwaVersionInfo" class="pwa-version-info' + (mismatch ? ' pwa-version-warning' : '') + '">' +
-          '<strong>NFL Spread Tool</strong> · App v' + APP_VERSION + ' · API v' + api +
-          (mismatch ? '<br>Update pending — reopen the app if this remains mismatched.' : '') +
-        '</div>';
-      }
-
-      function mountVersion() {
-        var toolsIntro = document.querySelector('.tools-intro');
-        if (!toolsIntro) return;
-        var main = toolsIntro.closest('main');
-        if (!main) return;
-        var existing = document.getElementById('pwaVersionInfo');
-        if (existing) existing.outerHTML = versionMarkup();
-        else main.insertAdjacentHTML('beforeend', versionMarkup());
-      }
-
-      if (appRoot) new MutationObserver(mountVersion).observe(appRoot, { childList: true, subtree: true });
-
-      fetch('/api/health', { cache: 'no-store', headers: { accept: 'application/json' } })
-        .then(function (response) { return response.ok ? response.json() : Promise.reject(new Error('health')); })
-        .then(function (body) { apiVersion = body.version || 'unknown'; mountVersion(); })
-        .catch(function () { healthFailed = true; mountVersion(); });
-
-      if ('serviceWorker' in navigator) {
-        var reloading = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-          if (reloading) return;
-          reloading = true;
-          window.location.reload();
-        });
-        navigator.serviceWorker.register('/sw.js?v=' + APP_VERSION, { scope: '/', updateViaCache: 'none' })
-          .then(function (registration) { registration.update().catch(function () {}); })
-          .catch(function () {});
-      }
-    })();
-  </script>`;
-
-  return html.replace("</head>", `${head}\n</head>`).replace("</body>", `${script}\n</body>`);
 }

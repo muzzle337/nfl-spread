@@ -67,10 +67,15 @@ export async function fetchNfldataTeamStats(season, week, fetchImpl = fetch) {
 }
 
 export async function fetchNflverseWeek(season, week, fetchImpl = fetch) {
+  const rows = await fetchNflverseSeason(season, fetchImpl);
+  return rows.filter((row) => Number(row.week) === Number(week));
+}
+
+export async function fetchNflverseSeason(season, fetchImpl = fetch) {
   const response = await fetchImpl(NFLVERSE_SCHEDULES_CSV, { headers: { accept: "text/csv" } });
   if (!response.ok) throw new Error(`nflverse schedules returned ${response.status}`);
   const rows = parseCsv(await response.text());
-  return rows.filter((row) => Number(row.season) === Number(season) && Number(row.week) === Number(week) && String(row.game_type || row.season_type || "REG").toUpperCase().startsWith("REG"));
+  return rows.filter((row) => Number(row.season) === Number(season) && String(row.game_type || row.season_type || "REG").toUpperCase().startsWith("REG"));
 }
 
 export function normalizeScheduleRow(row) {

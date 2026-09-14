@@ -24,17 +24,17 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run mobile browser regression tests
         run: npm run test:e2e
-      - name: Upload Live Focus fixture screenshot
+      - name: Upload v0.22 canonical screen audit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-focus-fixture
-          path: test-results/live-focus-fixture.png
-          if-no-files-found: ignore
-      - name: Upload Game Detail fixture screenshot
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-detail-fixture
-          path: test-results/game-detail-fixture.png
+          name: v022-canonical-screens
+          path: |
+            test-results/v022-dashboard.png
+            test-results/v022-tier-filter.png
+            test-results/v022-week2.png
+            test-results/v022-games.png
+            test-results/v022-picks.png
+            test-results/v022-game-detail.png
+            test-results/v022-tools.png
           if-no-files-found: ignore
