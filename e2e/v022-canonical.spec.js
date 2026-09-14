@@ -92,7 +92,10 @@ test.beforeEach(async({page})=>{
     if(url.pathname==='/api/pool/outlooks')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(pool(week))});
     if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:week,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,games:[
       {id:'c1',week:1,awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:24,homeScore:20,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
-      {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'}
+      {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'},
+      {id:'c3',week:1,awayTeam:'Dallas Cowboys',homeTeam:'New York Giants',awayScore:27,homeScore:20,awaySpread:-3,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
+      {id:'c4',week:1,awayTeam:'Philadelphia Eagles',homeTeam:'Washington Commanders',awayScore:24,homeScore:17,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
+      {id:'c5',week:1,awayTeam:'Las Vegas Raiders',homeTeam:'Denver Broncos',awayScore:17,homeScore:21,awaySpread:-1.5,classification:'AwayFav',tier:'<=3',outcome:'LOSS'}
     ]})});
     if(url.pathname==='/api/admin/session')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,configured:true,authenticated:false})});
     if(url.pathname==='/sw.js')return route.fulfill({status:200,contentType:'application/javascript',body:''});
@@ -116,8 +119,8 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
 
   await page.locator('[data-bucket="AwayFav|<=3"]').click();
   await expect(page.getByText('Away Favorite · 0.5–3',{exact:true})).toBeVisible();
-  await expect(page.getByText('CONTRIBUTING RESULTS · 2')).toBeVisible();
-  await expect(page.locator('.contributor')).toHaveCount(2);
+  await expect(page.getByText('CONTRIBUTING RESULTS · 5')).toBeVisible();
+  await expect(page.locator('.contributor')).toHaveCount(5);
   await expect(page.getByText('3-2 · 60% · n=5')).toBeVisible();
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page.locator('.game-card')).toContainText('BUF');
