@@ -1,4 +1,5 @@
 import { ensureMarketSchema } from "./market-schema.js";
+import { teamCode } from "./context-sources.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -93,12 +94,23 @@ async function latestMoneylineForSource(db, gameId, source) {
   `).bind(gameId, source).first();
 }
 
-export async function ingestWeeklySpreads(db, games, now = new Date()) {
+export async function ingestWeeklySpreads(db, games, now = new Date(), requested = null) {
   if (!db) throw new Error("Database is not bound");
   const hasMoneyline = gamesContainMoneyline(games);
   if (hasMoneyline) await ensureMarketSchema(db);
 
-  const selection = selectEarliestUpcomingWeek(games, now);
+  const requestedSeason = Number(requested?.season);
+  const requestedWeek = Number(requested?.week);
+  const explicit = Number.isInteger(requestedSeason) && Number.isInteger(requestedWeek);
+  const selection = explicit ? {
+    season: requestedSeason,
+    week: requestedWeek,
+    seasonType: "REGULAR",
+    games: (Array.isArray(games) ? games : []).filter((game) => {
+      const meta = nflWeekForCommenceTime(game.commenceTime);
+      return meta?.season === requestedSeason && meta?.week === requestedWeek;
+    })
+  } : selectEarliestUpcomingWeek(games, now);
   let gamesUpserted = 0;
   let snapshotsInserted = 0;
   let snapshotsUnchanged = 0;
@@ -106,6 +118,11 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
   let moneylineSnapshotsUnchanged = 0;
 
   for (const game of selection.games) {
+    const stored = await db.prepare(`
+      SELECT id FROM games WHERE season=? AND week=? AND season_type='REGULAR'
+      AND (away_team=? OR away_team=?) AND (home_team=? OR home_team=?) LIMIT 1
+    `).bind(selection.season, selection.week, game.awayTeam, teamCode(game.awayTeam), game.homeTeam, teamCode(game.homeTeam)).first();
+    const gameId = stored?.id || game.id;
     await db.prepare(`
       INSERT INTO games(id, season, week, season_type, away_team, home_team, kickoff_at, status, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', CURRENT_TIMESTAMP)
@@ -118,7 +135,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
         kickoff_at = excluded.kickoff_at,
         updated_at = CURRENT_TIMESTAMP
     `).bind(
-      game.id,
+      gameId,
       selection.season,
       selection.week,
       selection.seasonType,
@@ -130,27 +147,27 @@ export async function ingestWeeklySpreads(db, games, now = new Date()) {
 
     for (const book of game.books ?? []) {
       if (hasMarketNumber(book.awaySpread) && hasMarketNumber(book.homeSpread)) {
-        const latest = await latestSpreadForSource(db, game.id, book.key);
+        const latest = await latestSpreadForSource(db, gameId, book.key);
         if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
           snapshotsUnchanged += 1;
         } else {
           await db.prepare(`
             INSERT INTO line_snapshots(game_id, captured_at, away_spread, source)
             VALUES (?, ?, ?, ?)
-          `).bind(game.id, book.lastUpdate ?? new Date().toISOString(), book.awaySpread, book.key).run();
+          `).bind(gameId, book.lastUpdate ?? new Date().toISOString(), book.awaySpread, book.key).run();
           snapshotsInserted += 1;
         }
       }
 
       if (hasMoneyline && hasMarketNumber(book.awayMoneyline) && hasMarketNumber(book.homeMoneyline)) {
-        const latestMoneyline = await latestMoneylineForSource(db, game.id, book.key);
+        const latestMoneyline = await latestMoneylineForSource(db, gameId, book.key);
         if (!moneylineChanged(latestMoneyline, book.awayMoneyline, book.homeMoneyline)) {
           moneylineSnapshotsUnchanged += 1;
         } else {
           await db.prepare(`
             INSERT INTO moneyline_snapshots(game_id, captured_at, away_moneyline, home_moneyline, source)
             VALUES (?, ?, ?, ?, ?)
-          `).bind(game.id, book.lastUpdate ?? new Date().toISOString(), book.awayMoneyline, book.homeMoneyline, book.key).run();
+          `).bind(gameId, book.lastUpdate ?? new Date().toISOString(), book.awayMoneyline, book.homeMoneyline, book.key).run();
           moneylineSnapshotsInserted += 1;
         }
       }

@@ -30,6 +30,8 @@ import {
   weeklyGameOutlooks
 } from './weekly-picks.js';
 import { APP_VERSION, canonicalAppPage } from './v022-ui.js';
+import { importSeasonSchedule } from './schedule-sync.js';
+import { tierContributors } from './tier-contributors.js';
 
 const RESULTS_REFRESH_CRON='15 12 * * *';
 const corsHeaders={
@@ -119,6 +121,19 @@ async function adminSessionRoute(request,env,url){
 }
 
 async function marketRoute(request,env,url){
+  if(url.pathname==='/api/schedule/nfl'&&request.method==='POST'){
+    const auth=await requireAdmin(request,env);
+    if(!auth.ok)return json({error:auth.error},auth.status);
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const target=await targetWeek(env,url);
+    if(!Number.isInteger(target.season))return json({error:'A valid season is required'},400);
+    try{
+      const schedule=await importSeasonSchedule(env.DB,target.season);
+      await invalidateWeeklyOutlookCache(env.DB);
+      return json({ok:true,schedule,cacheInvalidated:true,oddsApiCalled:false});
+    }catch(error){return json({error:'Unable to import NFL schedule',message:error.message},errorStatus(error))}
+  }
+
   if(url.pathname==='/api/odds/nfl'&&request.method==='GET'){
     if(!env.ODDS_API_KEY)return json({error:'Odds API is not configured'},503);
     try{
@@ -137,13 +152,19 @@ async function marketRoute(request,env,url){
     if(!env.ODDS_API_KEY)return json({error:'Odds API is not configured'},503);
     if(!env.DB)return json({error:'Database is not bound'},503);
     try{
-      const result=await fetchNflMarkets({apiKey:env.ODDS_API_KEY});
-      const ingestion=await ingestWeeklySpreads(env.DB,result.games,new Date());
-      await invalidateWeeklyOutlookCache(env.DB);
-      await logApiUsage(env,{requestType:'nfl_ingest',quota:result.quota,triggerType:'admin_page',success:true});
-      return json({ok:true,fetchedAt:new Date().toISOString(),quota:result.quota,ingestion,cacheInvalidated:true});
+      const requested=await targetWeek(env,url);
+      if(!Number.isInteger(requested.season)||!Number.isInteger(requested.week))return json({error:'A valid selected week is required'},400);
+      const bounds=await env.DB.prepare(`SELECT MIN(kickoff_at) AS first_kickoff,MAX(kickoff_at) AS last_kickoff,COUNT(*) AS games FROM games WHERE season=? AND week=? AND season_type='REGULAR'`).bind(requested.season,requested.week).first();
+      if(!Number(bounds?.games)||!bounds?.first_kickoff||!bounds?.last_kickoff)return json({error:`Week ${requested.week} schedule is not loaded. Load the free season schedule first.`},409);
+      const from=new Date(new Date(bounds.first_kickoff).getTime()-6*60*60*1000).toISOString();
+      const to=new Date(new Date(bounds.last_kickoff).getTime()+6*60*60*1000).toISOString();
+      const result=await fetchNflMarkets({apiKey:env.ODDS_API_KEY,commenceTimeFrom:from,commenceTimeTo:to});
+      const ingestion=await ingestWeeklySpreads(env.DB,result.games,new Date(),requested);
+      await invalidateWeeklyOutlookCache(env.DB,requested.season,requested.week);
+      await logApiUsage(env,{requestType:'nfl_ingest_selected_week',quota:result.quota,triggerType:'admin_page',success:true});
+      return json({ok:true,fetchedAt:new Date().toISOString(),selectedWeek:requested,requestWindow:{from,to},quota:result.quota,ingestion,cacheInvalidated:true});
     }catch(error){
-      await logApiUsage(env,{requestType:'nfl_ingest',quota:error.quota,triggerType:'admin_page',success:false});
+      await logApiUsage(env,{requestType:'nfl_ingest_selected_week',quota:error.quota,triggerType:'admin_page',success:false});
       return json({error:'Unable to ingest NFL markets',message:error.message,quota:error.quota??null},errorStatus(error));
     }
   }
@@ -440,6 +461,13 @@ async function coreDataRoute(request,env,url){
     catch(error){return json({error:'Results integrity unavailable',message:error.message},400)}
   }
 
+  if(url.pathname==='/api/tiers/contributors'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=Number(url.searchParams.get('season')),week=Number(url.searchParams.get('week'));
+    try{return json({ok:true,...await tierContributors(env.DB,season,week,url.searchParams.get('classification'),url.searchParams.get('tier'))})}
+    catch(error){return json({error:'Tier contributors unavailable',message:error.message},400)}
+  }
+
   if(url.pathname==='/api/usage'&&request.method==='GET'){
     try{return json({ok:true,...await usageSummary(env)})}
     catch(error){return json({error:'Usage data unavailable',message:error.message},503)}
@@ -482,6 +510,9 @@ async function healthRoute(env){
     dataFreshnessContract:true,
     finalScoreProminent:true,
     tierPercentVisibleOnCards:true,
+    tierContributorDrilldown:true,
+    fullSeasonScheduleBrowsing:true,
+    selectedWeekMarketIngestion:true,
     gameCardStatusFirst:true,
     teamScoresInline:true,
     finalCardsPostgameOnly:true,

@@ -36,4 +36,5 @@ jobs:
             test-results/v022-games.png
             test-results/v022-picks.png
             test-results/v022-game-detail.png
+            test-results/v022-tools.png
           if-no-files-found: ignore

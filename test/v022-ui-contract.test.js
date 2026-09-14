@@ -30,7 +30,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/function picks\(\)/);
   assert.match(html,/data-week-select/);
   assert.match(html,/data-bucket/);
-  assert.match(html,/Focus This Week/);
+  assert.match(html,/Qualified Games This Week/);
+  assert.match(html,/Upcoming games in categories currently hitting 55%\+/);
+  assert.match(html,/Contributing Results/);
+  assert.match(html,/QUALIFIED/);
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
   assert.match(html,/Expert Read/);
@@ -42,7 +45,9 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/FINAL SPREAD RESULT/);
   assert.match(html,/Spread Result/);
   assert.match(html,/<details><summary>Sportsbooks/);
-  assert.match(html,/Scores first, then current spreads and moneylines/);
+  assert.match(html,/Load Week .+ Lines/);
+  assert.match(html,/one targeted spreads \+ moneylines request/);
+  assert.match(html,/Load 2026 Season Schedule/);
 });
 
 test('canonical shell uses approved APIs without recurring background refresh',()=>{
@@ -53,8 +58,11 @@ test('canonical shell uses approved APIs without recurring background refresh',(
   assert.match(html,/q\('\/api\/dashboard\/nfl'\)/);
   assert.match(html,/q\('\/api\/focus\/opportunities'\)/);
   assert.match(html,/\/api\/data\/freshness/);
+  assert.match(html,/\/api\/tiers\/contributors/);
+  assert.match(html,/\/api\/schedule\/nfl/);
   assert.match(html,/\/api\/ingest\/nfl\/results/);
   assert.match(html,/\/api\/ingest\/nfl/);
+  assert.match(html,/This makes one targeted Odds API request/);
   assert.doesNotMatch(html,/setTimeout\([^)]*load|setInterval/);
 });
 

@@ -31,8 +31,11 @@ export function buildNflSpreadsUrl(apiKey) {
   return buildNflOddsUrl(apiKey, ["spreads"]);
 }
 
-export function buildNflMarketsUrl(apiKey) {
-  return buildNflOddsUrl(apiKey, ["spreads", "h2h"]);
+export function buildNflMarketsUrl(apiKey, window = {}) {
+  const url = buildNflOddsUrl(apiKey, ["spreads", "h2h"]);
+  if (window.commenceTimeFrom) url.searchParams.set("commenceTimeFrom", new Date(window.commenceTimeFrom).toISOString());
+  if (window.commenceTimeTo) url.searchParams.set("commenceTimeTo", new Date(window.commenceTimeTo).toISOString());
+  return url;
 }
 
 export function buildNflScoresUrl(apiKey, daysFrom = 3) {
@@ -166,8 +169,8 @@ export async function fetchNflSpreads({ apiKey, fetchImpl = fetch }) {
   };
 }
 
-export async function fetchNflMarkets({ apiKey, fetchImpl = fetch }) {
-  const url = buildNflMarketsUrl(apiKey);
+export async function fetchNflMarkets({ apiKey, fetchImpl = fetch, commenceTimeFrom = null, commenceTimeTo = null }) {
+  const url = buildNflMarketsUrl(apiKey, { commenceTimeFrom, commenceTimeTo });
   const { payload, quota } = await fetchOddsApiJson(url, fetchImpl);
 
   return {

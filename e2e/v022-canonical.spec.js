@@ -90,6 +90,10 @@ test.beforeEach(async({page})=>{
     if(url.pathname==='/api/focus/opportunities')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(focus(week))});
     if(url.pathname==='/api/data/freshness')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,state:'CURRENT'})});
     if(url.pathname==='/api/pool/outlooks')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(pool(week))});
+    if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:week,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,games:[
+      {id:'c1',week:1,awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:24,homeScore:20,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
+      {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'}
+    ]})});
     if(url.pathname==='/api/admin/session')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,configured:true,authenticated:false})});
     if(url.pathname==='/sw.js')return route.fulfill({status:200,contentType:'application/javascript',body:''});
     return route.fulfill({status:404,contentType:'application/json',body:'{}'});
@@ -98,8 +102,9 @@ test.beforeEach(async({page})=>{
   await expect(page.getByText('TIER PULSE')).toBeVisible();
 });
 
-test('Dashboard connects Tier Pulse to qualified upcoming Focus games',async({page})=>{
-  await expect(page.getByText('FOCUS THIS WEEK')).toBeVisible();
+test('Dashboard connects Tier Pulse to qualified upcoming games and contributors',async({page})=>{
+  await expect(page.getByText('QUALIFIED GAMES THIS WEEK')).toBeVisible();
+  await expect(page.getByText('Upcoming games in categories currently hitting 55%+')).toBeVisible();
   const focusCard=page.locator('.focus-row').filter({hasText:'BUF @ HOU'});
   await expect(focusCard).toContainText('Away Favorite · 0.5–3');
   await expect(focusCard).toContainText('60%');
@@ -111,12 +116,17 @@ test('Dashboard connects Tier Pulse to qualified upcoming Focus games',async({pa
 
   await page.locator('[data-bucket="AwayFav|<=3"]').click();
   await expect(page.getByText('Away Favorite · 0.5–3',{exact:true})).toBeVisible();
+  await expect(page.getByText('CONTRIBUTING RESULTS · 2')).toBeVisible();
+  await expect(page.locator('.contributor')).toHaveCount(2);
+  await expect(page.getByText('3-2 · 60% · n=5')).toBeVisible();
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page.locator('.game-card')).toContainText('BUF');
   await page.screenshot({path:'test-results/v022-tier-filter.png',fullPage:true});
 });
 
 test('Week selector loads the known Week 2 schedule before Week 1 is complete',async({page})=>{
+  const paid=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/ingest/'))paid.push(request.url())});
   await page.locator('[data-week-select]').selectOption('2');
   await expect(page.locator('[data-week-select]')).toHaveValue('2');
   await expect(page.getByText('DEN @ KC')).toBeVisible();
@@ -124,6 +134,7 @@ test('Week selector loads the known Week 2 schedule before Week 1 is complete',a
   await page.getByRole('button',{name:/Games/}).click();
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page).toHaveURL(/week=2/);
+  expect(paid).toEqual([]);
   await page.screenshot({path:'test-results/v022-week2.png',fullPage:true});
 });
 
@@ -133,6 +144,8 @@ test('Games shows spreads, moneylines, category, tier and tracked movement',asyn
   await expect(upcoming).toContainText('-2.5 · ML -125');
   await expect(upcoming).toContainText('+2.5 · ML +110');
   await expect(upcoming).toContainText('Away Favorite / Home Dog');
+  await expect(upcoming).toContainText('QUALIFIED B · BUF');
+  await expect(upcoming).toContainText('Away Favorite · 60% · 3-2 · n=5');
   await expect(upcoming).toContainText('Open BUF -1.5 → Current BUF -2.5');
   const final=page.locator('.game-card').filter({hasText:'SF'}).filter({hasText:'LAR'});
   await expect(final).toContainText('FINAL');
@@ -162,4 +175,13 @@ test('Game Detail explains market, thesis, Brain, history and context',async({pa
   const details=page.locator('.books details');
   await expect(details).not.toHaveAttribute('open','');
   await page.screenshot({path:'test-results/v022-game-detail.png',fullPage:true});
+});
+
+test('Tools makes free schedule and selected-week paid actions explicit',async({page})=>{
+  await page.locator('.bottom-nav [data-tab="tools"]').click();
+  await expect(page.getByText('Load 2026 Season Schedule')).toBeVisible();
+  await expect(page.getByText('FREE · stores Weeks 1–18 without using Odds API credits')).toBeVisible();
+  await expect(page.getByText('Load Week 1 Lines')).toBeVisible();
+  await expect(page.getByText('PAID · one targeted spreads + moneylines request')).toBeVisible();
+  await page.screenshot({path:'test-results/v022-tools.png',fullPage:true});
 });
