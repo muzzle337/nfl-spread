@@ -53,4 +53,34 @@ test('active worker entry bypasses the legacy HTML injection chain',()=>{
   assert.match(entry,/survivorActive:false/);
   assert.match(entry,/legacyUiInjection:false/);
   assert.doesNotMatch(entry,/withMoneylineSurvivorUi|withGameOutlookPicksUi|withV021Ui|withCanonicalGameDetail|upgradeHtml/);
+  assert.doesNotMatch(entry,/from ['"]\.\/v0(?:10|11|12|13|14|15|16|17|18|19|20|21)/);
+  assert.match(entry,/import coreApp from '\.\/index\.js'/);
+  assert.match(entry,/canonicalBackendRouter:true/);
+  assert.match(entry,/legacyEntryDelegation:false/);
+});
+
+test('canonical backend reports its contract and deactivates Survivor routes',async()=>{
+  const health=await worker.fetch(new Request('https://example.com/api/health'),{});
+  assert.equal(health.status,200);
+  const body=await health.json();
+  assert.equal(body.version,'0.22.0');
+  assert.equal(body.canonicalBackendRouter,true);
+  assert.equal(body.legacyEntryDelegation,false);
+  assert.equal(body.survivorActive,false);
+
+  const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
+  assert.equal(survivor.status,410);
+  assert.match((await survivor.json()).error,/inactive/i);
+});
+
+test('canonical backend directly serves synchronized PWA assets',async()=>{
+  const manifest=await worker.fetch(new Request('https://example.com/manifest.webmanifest'),{});
+  assert.equal(manifest.status,200);
+  assert.equal((await manifest.json()).display,'standalone');
+
+  const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
+  const script=await sw.text();
+  assert.match(script,/VERSION = "0\.22\.0"/);
+  assert.match(script,/GET_VERSION/);
+  assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });
