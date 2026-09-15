@@ -5,7 +5,7 @@ import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
 test('v0.22 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.22.0');
+  assert.equal(APP_VERSION,'0.22.1');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -43,6 +43,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Brain/);
   assert.match(html,/Context/);
   assert.match(html,/ML /);
+  assert.match(html,/Market win/);
+  assert.match(html,/Category ATS/);
+  assert.match(html,/Game Insight · strategy, signals, history & context/);
+  assert.match(html,/Open full game analysis/);
   assert.match(html,/Open .+ → /);
   assert.match(html,/FINAL SPREAD RESULT/);
   assert.match(html,/Spread Result/);
@@ -103,10 +107,12 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.22.0');
+  assert.equal(body.version,'0.22.1');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
+  assert.equal(body.picksTierContext,true);
+  assert.equal(body.picksMarketWinSeparatedFromAts,true);
   assert.equal(body.seasonTierMomentum,true);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
@@ -121,7 +127,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.22\.0"/);
+  assert.match(script,/VERSION = "0\.22\.1"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });

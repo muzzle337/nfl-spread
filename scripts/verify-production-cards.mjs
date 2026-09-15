@@ -66,6 +66,19 @@ for(const game of apiGames){
   }
 }
 
+await page.locator('.bottom-nav [data-tab="picks"]').click();
+await page.waitForSelector('.pick-game',{timeout:30000});
+const pickText=(await page.locator('.pick-game').first().innerText()).toUpperCase();
+for(const required of ['SPREAD','ML','MARKET WIN','ATS','TIER']){
+  if(!pickText.includes(required))fail('Production Picks card missing '+required);
+}
+const insight=page.locator('.pick-game').first().locator('.pick-insight');
+await insight.locator('summary').click();
+const insightText=(await insight.innerText()).toUpperCase();
+for(const required of ['STRATEGY','BRAIN','HISTORY','CONTEXT','OPEN FULL GAME ANALYSIS']){
+  if(!insightText.includes(required))fail('Production Picks insight missing '+required);
+}
+
 await page.screenshot({path:'production-card-check.png',fullPage:true});
 console.log('Rendered production card acceptance passed');
 await browser.close();
