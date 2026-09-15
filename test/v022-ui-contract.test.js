@@ -32,7 +32,9 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/data-bucket/);
   assert.match(html,/Qualified Games This Week/);
   assert.match(html,/Upcoming games in categories currently hitting 55%\+/);
-  assert.match(html,/Contributing Results/);
+  assert.match(html,/All Season Contributors/);
+  assert.match(html,/Weekly Momentum/);
+  assert.match(html,/seasonPulse/);
   assert.match(html,/QUALIFIED/);
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
@@ -105,6 +107,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
+  assert.equal(body.seasonTierMomentum,true);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
   assert.equal(survivor.status,410);
