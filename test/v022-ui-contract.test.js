@@ -76,11 +76,16 @@ test('Dashboard route honors an explicitly selected schedule week',()=>{
   const entry=readFileSync(new URL('../src/v022-entry.js',import.meta.url),'utf8');
   const data=readFileSync(new URL('../src/dashboard-data.js',import.meta.url),'utf8');
   const productionSmoke=readFileSync(new URL('../.github/workflows/production-smoke.yml',import.meta.url),'utf8');
+  const productionCards=readFileSync(new URL('../scripts/verify-production-cards.mjs',import.meta.url),'utf8');
+  const productionDetail=readFileSync(new URL('../scripts/verify-production-game-detail.mjs',import.meta.url),'utf8');
   assert.match(entry,/dashboardSnapshot\(env\.DB,new Date\(\),target\)/);
   assert.match(data,/dashboardSnapshot\(db, now = new Date\(\), selected = null\)/);
   assert.match(data,/requestedSeason/);
   assert.match(data,/requestedWeek/);
   assert.match(productionSmoke,/dashboard\/nfl\?season=2026&week=1/);
+  assert.match(productionCards,/dashboard\/nfl\?season=2026&week=1/);
+  assert.match(productionCards,/page\.goto\(base\+'\/\?week=1'/);
+  assert.match(productionDetail,/page\.goto\(base\+'\/\?week=1'/);
 });
 
 test('active worker entry bypasses the legacy HTML injection chain',()=>{
