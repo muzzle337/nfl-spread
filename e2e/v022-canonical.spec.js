@@ -33,6 +33,22 @@ const finalGame=projectedGame({
   postgame:{spreadResult:'COVER',coveringTeam:'San Francisco 49ers',liveBucket:{wins:1,losses:0,pushes:0,coverRate:100}}
 });
 
+const seasonPulse={
+  season:2026,throughWeek:1,gamesConsidered:5,
+  buckets:{
+    'AwayDog|<=3':{wins:1,losses:2,pushes:0,decisions:3,coverRate:33.3},
+    'AwayFav|<=3':{wins:3,losses:2,pushes:0,decisions:5,coverRate:60},
+    'HomeDog|<=3':{wins:2,losses:3,pushes:0,decisions:5,coverRate:40},
+    'HomeFav|<=3':{wins:2,losses:1,pushes:0,decisions:3,coverRate:66.7},
+    'AwayDog|<=7':{wins:1,losses:0,pushes:0,decisions:1,coverRate:100},
+    'HomeFav|<=7':{wins:0,losses:1,pushes:0,decisions:1,coverRate:0}
+  },
+  momentum:{
+    'AwayFav|<=3':[{week:1,weekly:{wins:3,losses:2,pushes:0,decisions:5,coverRate:60},cumulative:{wins:3,losses:2,pushes:0,decisions:5,coverRate:60}}],
+    'HomeFav|<=3':[{week:1,weekly:{wins:2,losses:1,pushes:0,decisions:3,coverRate:66.7},cumulative:{wins:2,losses:1,pushes:0,decisions:3,coverRate:66.7}}]
+  }
+};
+
 function dashboard(week){
   const games=week===2?[projectedGame({
     id:'g3',week:2,awayTeam:'Denver Broncos',homeTeam:'Kansas City Chiefs',kickoffAt:'2026-09-20T20:25:00Z',
@@ -43,7 +59,7 @@ function dashboard(week){
   })]:[finalGame,projectedGame()];
   return {
     ok:true,season:2026,week,results:{completedGames:week===1?1:0,awaitingCompletion:games.length},
-    currentSeasonGamesConsidered:5,
+    currentSeasonGamesConsidered:5,seasonPulse,
     liveWeekStats:{gamesConsidered:5,buckets:{
       'AwayDog|<=3':{wins:1,losses:2,pushes:0,coverRate:33.3},
       'AwayFav|<=3':{wins:3,losses:2,pushes:0,coverRate:60},
@@ -92,7 +108,7 @@ test.beforeEach(async({page})=>{
     if(url.pathname==='/api/focus/opportunities')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(focus(week))});
     if(url.pathname==='/api/data/freshness')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,state:'CURRENT'})});
     if(url.pathname==='/api/pool/outlooks')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(pool(week))});
-    if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:week,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,games:[
+    if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:1,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,momentum:seasonPulse.momentum['AwayFav|<=3'],games:[
       {id:'c1',week:1,awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:24,homeScore:20,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
       {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'},
       {id:'c3',week:1,awayTeam:'Dallas Cowboys',homeTeam:'New York Giants',awayScore:27,homeScore:20,awaySpread:-3,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
@@ -120,8 +136,9 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await page.screenshot({path:'test-results/v022-dashboard.png',fullPage:true});
 
   await page.locator('[data-bucket="AwayFav|<=3"]').click();
-  await expect(page.getByText('Away Favorite · 0.5–3',{exact:true})).toBeVisible();
-  await expect(page.getByText('CONTRIBUTING RESULTS · 5')).toBeVisible();
+  await expect(page.getByText('Away Favorite · 0.5–3 · Season to date',{exact:true})).toBeVisible();
+  await expect(page.getByText('WEEKLY MOMENTUM')).toBeVisible();
+  await expect(page.getByText('ALL SEASON CONTRIBUTORS · 5')).toBeVisible();
   await expect(page.locator('.contributor')).toHaveCount(5);
   await expect(page.getByText('3-2 · 60% · n=5')).toBeVisible();
   await expect(page.locator('.game-card')).toHaveCount(1);
@@ -136,6 +153,7 @@ test('Week selector loads the known Week 2 schedule before Week 1 is complete',a
   await expect(page.locator('[data-week-select]')).toHaveValue('2');
   await expect(page.getByText('DEN @ KC')).toBeVisible();
   await expect(page.getByText('Home Favorite · 0.5–3')).toBeVisible();
+  await expect(page.locator('[data-bucket="AwayFav|<=3"]')).toContainText('3-2 season');
   await page.getByRole('button',{name:/Games/}).click();
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page).toHaveURL(/week=2/);

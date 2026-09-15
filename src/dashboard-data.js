@@ -1,6 +1,7 @@
 import { projectionsForWeek } from "./projection.js";
 import { weekResultsStatus } from "./result-sync.js";
 import { settleAgainstSpread } from "./engine.js";
+import { seasonTierPulse } from "./tier-contributors.js";
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -110,9 +111,10 @@ export async function dashboardSnapshot(db, now = new Date(), selected = null) {
     };
   }
 
-  const [projection, results] = await Promise.all([
+  const [projection, results, seasonPulse] = await Promise.all([
     projectionsForWeek(db, target.season, target.week),
-    weekResultsStatus(db, target.season, target.week, now)
+    weekResultsStatus(db, target.season, target.week, now),
+    seasonTierPulse(db, target.season)
   ]);
 
   const resultById = new Map((results.games ?? []).map((game) => [String(game.id), game]));
@@ -136,6 +138,7 @@ export async function dashboardSnapshot(db, now = new Date(), selected = null) {
 
   return {
     ...projection,
+    seasonPulse,
     games,
     results
   };

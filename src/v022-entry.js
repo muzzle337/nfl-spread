@@ -463,8 +463,8 @@ async function coreDataRoute(request,env,url){
 
   if(url.pathname==='/api/tiers/contributors'&&request.method==='GET'){
     if(!env.DB)return json({error:'Database is not bound'},503);
-    const season=Number(url.searchParams.get('season')),week=Number(url.searchParams.get('week'));
-    try{return json({ok:true,...await tierContributors(env.DB,season,week,url.searchParams.get('classification'),url.searchParams.get('tier'))})}
+    const season=Number(url.searchParams.get('season'));
+    try{return json({ok:true,...await tierContributors(env.DB,season,url.searchParams.get('classification'),url.searchParams.get('tier'))})}
     catch(error){return json({error:'Tier contributors unavailable',message:error.message},400)}
   }
 
@@ -511,6 +511,7 @@ async function healthRoute(env){
     finalScoreProminent:true,
     tierPercentVisibleOnCards:true,
     tierContributorDrilldown:true,
+    seasonTierMomentum:true,
     fullSeasonScheduleBrowsing:true,
     selectedWeekMarketIngestion:true,
     gameCardStatusFirst:true,

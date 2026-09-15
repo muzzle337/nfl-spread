@@ -33,8 +33,9 @@ export function buildNflSpreadsUrl(apiKey) {
 
 export function buildNflMarketsUrl(apiKey, window = {}) {
   const url = buildNflOddsUrl(apiKey, ["spreads", "h2h"]);
-  if (window.commenceTimeFrom) url.searchParams.set("commenceTimeFrom", new Date(window.commenceTimeFrom).toISOString());
-  if (window.commenceTimeTo) url.searchParams.set("commenceTimeTo", new Date(window.commenceTimeTo).toISOString());
+  const providerTimestamp = (value) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z");
+  if (window.commenceTimeFrom) url.searchParams.set("commenceTimeFrom", providerTimestamp(window.commenceTimeFrom));
+  if (window.commenceTimeTo) url.searchParams.set("commenceTimeTo", providerTimestamp(window.commenceTimeTo));
   return url;
 }
 
