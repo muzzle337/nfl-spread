@@ -136,7 +136,7 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await page.screenshot({path:'test-results/v022-dashboard.png',fullPage:true});
 
   await page.locator('[data-bucket="AwayFav|<=3"]').click();
-  await expect(page.getByText('Away Favorite · 0.5–3',{exact:true})).toBeVisible();
+  await expect(page.getByText('Away Favorite · 0.5–3 · Season to date',{exact:true})).toBeVisible();
   await expect(page.getByText('WEEKLY MOMENTUM')).toBeVisible();
   await expect(page.getByText('ALL SEASON CONTRIBUTORS · 5')).toBeVisible();
   await expect(page.locator('.contributor')).toHaveCount(5);
