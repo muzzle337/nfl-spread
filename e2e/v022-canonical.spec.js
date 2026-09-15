@@ -188,7 +188,7 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
   await expect(matchup).toContainText('Market win 46%');
   await expect(matchup).toContainText('Away Dog ATS · 33.3% · 1-2');
   await expect(matchup).toContainText('Home Favorite ATS · 66.7% · 2-1');
-  await expect(matchup).toContainText('Open DEN +3 → Current DEN +2');
+  await expect(matchup).toContainText('Open DEN +1 → Current DEN +2');
   await matchup.locator('.pick-insight summary').click();
   await expect(matchup).toContainText('Strategy');
   await expect(matchup).toContainText('Brain');
