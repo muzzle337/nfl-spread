@@ -498,6 +498,8 @@ async function healthRoute(env){
     uiRuntimePolling:false,
     weeklyPoolPicks:true,
     weeklyPoolGrading:true,
+    picksTierContext:true,
+    picksMarketWinSeparatedFromAts:true,
     imessageExport:true,
     publicPickPercentage:false,
     contextIntelligence:true,
