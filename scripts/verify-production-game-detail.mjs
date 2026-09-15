@@ -5,7 +5,7 @@ const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
 
 try{
-  await page.goto(base,{waitUntil:'networkidle',timeout:60000});
+  await page.goto(base+'/?week=1',{waitUntil:'networkidle',timeout:60000});
   await page.getByRole('button',{name:/Games/}).click();
   const cards=page.locator('.game-card');
   await cards.first().waitFor({state:'visible',timeout:30000});

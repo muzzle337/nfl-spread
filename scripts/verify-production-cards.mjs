@@ -31,7 +31,7 @@ async function verifyFinalCard(away,home,awayScore,homeScore,resultText){
   if(!text.includes(resultText))fail(away+'@'+home+': expected '+resultText);
 }
 
-const dashboardResponse=await fetch(base+'/api/dashboard/nfl',{headers:{accept:'application/json'}});
+const dashboardResponse=await fetch(base+'/api/dashboard/nfl?season=2026&week=1',{headers:{accept:'application/json'}});
 if(!dashboardResponse.ok)fail('Dashboard API failed: '+dashboardResponse.status);
 const dashboard=await dashboardResponse.json();
 const apiGames=Array.isArray(dashboard.games)?dashboard.games:[];
@@ -42,7 +42,7 @@ const overdue=apiGames.filter(game=>{
 });
 if(overdue.length)fail('Production has games >4h past kickoff still not FINAL: '+overdue.map(g=>g.awayTeam+' @ '+g.homeTeam).join('; '));
 
-await page.goto(base,{waitUntil:'networkidle',timeout:60000});
+await page.goto(base+'/?week=1',{waitUntil:'networkidle',timeout:60000});
 await page.getByRole('button',{name:/Games/}).click();
 await page.waitForSelector('.game-card',{timeout:30000});
 await page.waitForTimeout(800);
@@ -66,6 +66,7 @@ for(const game of apiGames){
   }
 }
 
+await page.locator('[data-week-select]').selectOption('2');
 await page.locator('.bottom-nav [data-tab="picks"]').click();
 await page.waitForSelector('.pick-game',{timeout:30000});
 const pickText=(await page.locator('.pick-game').first().innerText()).toUpperCase();
