@@ -51,7 +51,7 @@ jobs:
           BASE="https://nfl-spread-api.sanro4.workers.dev"
           for attempt in $(seq 1 50); do
             results="$(curl -fsS --max-time 20 "$BASE/api/results/status?season=2026&week=1" || true)"
-            dashboard="$(curl -fsS --max-time 30 "$BASE/api/dashboard/nfl" || true)"
+            dashboard="$(curl -fsS --max-time 30 "$BASE/api/dashboard/nfl?season=2026&week=1" || true)"
             if RESULTS="$results" DASHBOARD="$dashboard" python - <<'PY'
           import json,os
           try:

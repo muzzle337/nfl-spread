@@ -75,10 +75,12 @@ test('canonical shell uses approved APIs without recurring background refresh',(
 test('Dashboard route honors an explicitly selected schedule week',()=>{
   const entry=readFileSync(new URL('../src/v022-entry.js',import.meta.url),'utf8');
   const data=readFileSync(new URL('../src/dashboard-data.js',import.meta.url),'utf8');
+  const productionSmoke=readFileSync(new URL('../.github/workflows/production-smoke.yml',import.meta.url),'utf8');
   assert.match(entry,/dashboardSnapshot\(env\.DB,new Date\(\),target\)/);
   assert.match(data,/dashboardSnapshot\(db, now = new Date\(\), selected = null\)/);
   assert.match(data,/requestedSeason/);
   assert.match(data,/requestedWeek/);
+  assert.match(productionSmoke,/dashboard\/nfl\?season=2026&week=1/);
 });
 
 test('active worker entry bypasses the legacy HTML injection chain',()=>{
