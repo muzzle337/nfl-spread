@@ -17,7 +17,7 @@ try{
   const detail=page.locator('.detail-head');
   await detail.waitFor({state:'visible',timeout:30000});
   const body=(await page.locator('#app').innerText()).toUpperCase();
-  const required=['FINAL','SPREAD RESULT','ORIGINAL THESIS','EXPERT READ','HISTORICAL EVIDENCE','SPORTSBOOKS'];
+  const required=['FINAL','SPREAD RESULT','MARKET MOVEMENT','ORIGINAL THESIS','EXPERT READ','HISTORICAL EVIDENCE','SPORTSBOOKS'];
   const missing=required.filter(value=>!body.includes(value));
   if(missing.length)throw new Error('Missing canonical detail content: '+missing.join(', '));
 

@@ -73,11 +73,20 @@ function dashboard(week){
 
 function outlookGame(g){
   const away=g.projectedTeam===g.awayTeam;
+  const currentAway=g.moneyline?.consensusAwayMoneyline??180,currentHome=g.moneyline?.consensusHomeMoneyline??-210;
   return {
     gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
     spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
     market:{awayMoneyline:g.moneyline?.consensusAwayMoneyline??180,homeMoneyline:g.moneyline?.consensusHomeMoneyline??-210,awayWinPct:g.moneyline?.awayWinProbability??.34,homeWinPct:g.moneyline?.homeWinProbability??.66},
-    movement:{firstCapturedAwaySpread:g.medianAwaySpread+(away?1:-1),currentAwaySpread:g.medianAwaySpread,closingAwaySpread:g.final?g.medianAwaySpread:null,movementMagnitude:1,direction:away?'TOWARD_AWAY':'TOWARD_HOME'},
+    movement:{firstCapturedAwaySpread:g.medianAwaySpread+(away?1:-1),currentAwaySpread:g.medianAwaySpread,closingAwaySpread:g.final?g.medianAwaySpread:null,movementMagnitude:1,direction:away?'TOWARD_AWAY':'TOWARD_HOME',marketAlignment:'ALIGNED',moneyline:{
+      openingAwayMoneyline:away?-110:100,openingHomeMoneyline:away?-105:-115,
+      currentAwayMoneyline:currentAway,currentHomeMoneyline:currentHome,
+      closingAwayMoneyline:g.final?currentAway:null,closingHomeMoneyline:g.final?currentHome:null,
+      openingAwayNoVigProbability:away?48.8:47,currentAwayNoVigProbability:away?54:46,
+      probabilityMagnitude:away?5.2:1,probabilityPointsAway:away?5.2:-1,
+      direction:away?'TOWARD_AWAY':'TOWARD_HOME',bookmakerCount:8,changedBookmakers:6,
+      towardAwayBookmakers:away?6:1,towardHomeBookmakers:away?0:5
+    }},
     history:{away:{notable:[{label:'Road games',games:12,winPct:58,coverPct:62}]},home:{notable:[{label:'Home games',games:10,winPct:60,coverPct:55}]}},
     context:{observations:[{kind:'supporting',label:'Rest edge',detail:'3 additional rest days',side:away?'AWAY':'HOME'}]},
     pick:g.final?g.awayTeam:null,pickResult:g.final?'CORRECT':null,final:g.final
@@ -170,6 +179,8 @@ test('Games shows spreads, moneylines, category, tier and tracked movement',asyn
   await expect(upcoming).toContainText('QUALIFIED B · BUF');
   await expect(upcoming).toContainText('Away Favorite · 60% · 3-2 · n=5');
   await expect(upcoming).toContainText('Open BUF -1.5 → Current BUF -2.5');
+  await expect(upcoming).toContainText('ML Open BUF -110 → Current -125');
+  await expect(upcoming).toContainText('BUF +5.2 probability pts · 6/8 books');
   const final=page.locator('.game-card').filter({hasText:'SF'}).filter({hasText:'LAR'});
   await expect(final).toContainText('FINAL');
   await expect(final).toContainText('SF COVERED');
@@ -189,6 +200,8 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
   await expect(matchup).toContainText('Away Dog ATS · 33.3% · 1-2');
   await expect(matchup).toContainText('Home Favorite ATS · 66.7% · 2-1');
   await expect(matchup).toContainText('Open DEN +1 → Current DEN +2');
+  await expect(matchup).toContainText('ML Open DEN +100 → Current +110');
+  await expect(matchup).toContainText('KC +1 probability pt · 5/8 books');
   await matchup.locator('.pick-insight summary').click();
   await expect(matchup).toContainText('Strategy');
   await expect(matchup).toContainText('Brain');
@@ -203,6 +216,10 @@ test('Game Detail explains market, thesis, Brain, history and context',async({pa
   await page.getByRole('button',{name:/Games/}).click();
   await page.locator('.game-card').filter({hasText:'BUF'}).filter({hasText:'HOU'}).click();
   await expect(page.getByText('CURRENT MARKET')).toBeVisible();
+  await expect(page.getByText('MARKET MOVEMENT')).toBeVisible();
+  await expect(page.getByText('Aligned',{exact:true})).toBeVisible();
+  await expect(page.getByText('Spread and moneyline both strengthened toward BUF')).toBeVisible();
+  await expect(page.getByText('ML Open BUF -110 / HOU -105 → Current BUF -125 / HOU +110')).toBeVisible();
   await expect(page.getByText('ORIGINAL THESIS')).toBeVisible();
   await expect(page.getByText('EXPERT READ')).toBeVisible();
   await expect(page.getByText('Brain',{exact:true})).toBeVisible();

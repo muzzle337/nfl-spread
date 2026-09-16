@@ -3,6 +3,8 @@ import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
 
+const OUTLOOK_CACHE_SCHEMA_VERSION = 2;
+
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
 export async function ensureWeeklyPicksSchema(db){
@@ -141,12 +143,17 @@ async function cachedWeeklyOutlookBase(db,season,week){
   await ensureWeeklyOutlookCacheSchema(db);
   const row=await db.prepare(`SELECT payload_json,built_at FROM weekly_outlook_cache WHERE season=? AND week=? LIMIT 1`).bind(season,week).first();
   if(row?.payload_json){
-    try{return {games:JSON.parse(row.payload_json),cache:{hit:true,builtAt:row.built_at}}}catch{}
+    try{
+      const payload=JSON.parse(row.payload_json);
+      if(payload?.schemaVersion===OUTLOOK_CACHE_SCHEMA_VERSION&&Array.isArray(payload.games)){
+        return {games:payload.games,cache:{hit:true,builtAt:row.built_at}};
+      }
+    }catch{}
   }
   const games=await buildWeeklyOutlookBase(db,season,week);
   await db.prepare(`INSERT INTO weekly_outlook_cache(season,week,payload_json,built_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(season,week) DO UPDATE SET payload_json=excluded.payload_json,built_at=CURRENT_TIMESTAMP`)
-    .bind(season,week,JSON.stringify(games)).run();
+    .bind(season,week,JSON.stringify({schemaVersion:OUTLOOK_CACHE_SCHEMA_VERSION,games})).run();
   return {games,cache:{hit:false,builtAt:null}};
 }
 

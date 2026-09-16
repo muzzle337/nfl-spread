@@ -22,11 +22,23 @@ const snapshots = [
   { id: 5, source: "c", away_spread: 4, captured_at: "2026-08-28T10:00:00Z" }
 ];
 
+const moneylineSnapshots = [
+  { id: 1, source: "a", away_moneyline: 150, home_moneyline: -170, captured_at: "2026-08-27T10:00:00Z" },
+  { id: 2, source: "b", away_moneyline: 145, home_moneyline: -165, captured_at: "2026-08-27T10:00:00Z" },
+  { id: 3, source: "c", away_moneyline: 150, home_moneyline: -170, captured_at: "2026-08-27T10:00:00Z" },
+  { id: 4, source: "a", away_moneyline: 165, home_moneyline: -190, captured_at: "2026-08-28T10:00:00Z" },
+  { id: 5, source: "b", away_moneyline: 160, home_moneyline: -185, captured_at: "2026-08-28T10:00:00Z" }
+];
+
 function fakeDb() {
   return {
     prepare(sql) {
       const normalized = sql.replace(/\s+/g, " ").trim();
       return {
+        async run() {
+          if (normalized.startsWith("CREATE TABLE") || normalized.startsWith("CREATE INDEX")) return {};
+          throw new Error(`Unexpected run query: ${normalized}`);
+        },
         bind(id) {
           return {
             async first() {
@@ -35,6 +47,7 @@ function fakeDb() {
             },
             async all() {
               if (normalized.startsWith("SELECT id, source, away_spread")) return { results: id === "g1" ? snapshots : [] };
+              if (normalized.startsWith("SELECT id, source, away_moneyline")) return { results: id === "g1" ? moneylineSnapshots : [] };
               throw new Error(`Unexpected all query: ${normalized}`);
             }
           };
@@ -69,6 +82,39 @@ test("negative away-spread movement means the market moved toward the away team"
   assert.equal(movement.currentAwaySpread, -3);
   assert.equal(movement.movementPointsAway, -0.5);
   assert.equal(movement.direction, "TOWARD_AWAY");
+});
+
+test("moneyline movement reports open, current, no-vig probability change and book agreement", () => {
+  const movement = summarizeLineMovement(game, snapshots, moneylineSnapshots);
+
+  assert.equal(movement.moneyline.openingAwayMoneyline, 150);
+  assert.equal(movement.moneyline.currentAwayMoneyline, 160);
+  assert.equal(movement.moneyline.closingAwayMoneyline, null);
+  assert.equal(movement.moneyline.direction, "TOWARD_HOME");
+  assert.equal(movement.moneyline.towardHomeBookmakers, 2);
+  assert.equal(movement.moneyline.bookmakerCount, 3);
+  assert.equal(movement.moneyline.changedBookmakers, 2);
+  assert.ok(movement.moneyline.probabilityMagnitude > 0);
+  assert.equal(movement.marketAlignment, "ALIGNED");
+});
+
+test("completed games expose the last stored moneyline as closing and flag divergent markets", () => {
+  const completed = summarizeLineMovement(
+    { ...game, status: "COMPLETED", closing_away_spread: -3 },
+    [
+      { id: 1, source: "a", away_spread: -2.5, captured_at: "2026-08-27T10:00:00Z" },
+      { id: 2, source: "a", away_spread: -3, captured_at: "2026-09-13T20:00:00Z" }
+    ],
+    [
+      { id: 1, source: "a", away_moneyline: -145, home_moneyline: 125, captured_at: "2026-08-27T10:00:00Z" },
+      { id: 2, source: "a", away_moneyline: -130, home_moneyline: 115, captured_at: "2026-09-13T20:00:00Z" }
+    ]
+  );
+
+  assert.equal(completed.moneyline.closingAwayMoneyline, -130);
+  assert.equal(completed.moneyline.closingHomeMoneyline, 115);
+  assert.equal(completed.moneyline.direction, "TOWARD_HOME");
+  assert.equal(completed.marketAlignment, "DIVERGENT");
 });
 
 test("closing line is kept separate from current movement and can remain pending", () => {
