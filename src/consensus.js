@@ -1,3 +1,5 @@
+import { dedupeCanonicalMatchups } from "./team-codes.js";
+
 function validSpreadNumbers(values) {
   return (Array.isArray(values) ? values : [])
     .filter((value) => value !== null && value !== undefined && value !== "")
@@ -111,12 +113,13 @@ export async function consensusLinesForWeek(db, season, week) {
     output.push(consensusForGame(game, latestResult.results ?? []));
   }
 
+  const deduped = dedupeCanonicalMatchups(output);
   return {
     season: seasonNumber,
     week: weekNumber,
-    gameCount: output.length,
+    gameCount: deduped.length,
     consensusMethod: "median_latest_bookmaker_spreads_with_frequency_tiebreak",
     consensusTieRule: "more_common_middle_line_then_closest_to_pickem",
-    games: output
+    games: deduped
   };
 }

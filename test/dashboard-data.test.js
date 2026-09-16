@@ -10,7 +10,16 @@ function fakeDb({ season = 2026, weeks = [] } = {}) {
         bind() {
           return {
             async all() {
-              if (normalized.includes("GROUP BY week")) return { results: weeks };
+              if (normalized.startsWith("SELECT id,season,week,away_team")) {
+                const results=[];
+                for(const summary of weeks){
+                  for(let index=0;index<summary.total_games;index+=1){
+                    const completed=index<summary.completed_games;
+                    results.push({id:`w${summary.week}g${index}`,season,week:summary.week,away_team:`A${index}`,home_team:`H${index}`,status:completed?'COMPLETED':'SCHEDULED',away_score:completed?20:null,home_score:completed?17:null});
+                  }
+                }
+                return {results};
+              }
               throw new Error(`Unexpected all query: ${normalized}`);
             }
           };

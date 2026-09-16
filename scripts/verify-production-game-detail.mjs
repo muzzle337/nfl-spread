@@ -17,7 +17,7 @@ try{
   const detail=page.locator('.detail-head');
   await detail.waitFor({state:'visible',timeout:30000});
   const body=(await page.locator('#app').innerText()).toUpperCase();
-  const required=['FINAL','SPREAD RESULT','MARKET MOVEMENT','ORIGINAL THESIS','EXPERT READ','HISTORICAL EVIDENCE','SPORTSBOOKS'];
+  const required=['FINAL','SPREAD RESULT','MARKET MOVEMENT','ORIGINAL THESIS','EXPERT READ','HISTORICAL EVIDENCE','SITUATIONAL TRENDS','SPORTSBOOKS'];
   const missing=required.filter(value=>!body.includes(value));
   if(missing.length)throw new Error('Missing canonical detail content: '+missing.join(', '));
 
@@ -44,8 +44,17 @@ try{
     if(!historicalText.includes(requiredEvidence))throw new Error('Historical Evidence missing '+requiredEvidence);
   }
 
+  const situational=page.locator('.detail-card').filter({hasText:'Situational Trends'});
+  const situationalItems=situational.locator('.evidence-item');
+  const situationalCount=await situationalItems.count();
+  if(situationalCount<1||situationalCount>2)throw new Error('Expected 1-2 situational trends, got '+situationalCount);
+  const situationalText=(await situational.innerText()).toUpperCase();
+  for(const requiredTrend of ['OUTRIGHT','NFL BASELINE','2023–2025']){
+    if(!situationalText.includes(requiredTrend))throw new Error('Situational Trends missing '+requiredTrend);
+  }
+
   await page.screenshot({path:'production-game-detail-check.png',fullPage:true});
-  console.log('Rendered production Game Detail acceptance passed with '+evidenceCount+' historical evidence items');
+  console.log('Rendered production Game Detail acceptance passed with '+evidenceCount+' historical evidence items and '+situationalCount+' situational trends');
 }finally{
   await browser.close();
 }

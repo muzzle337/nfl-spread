@@ -1,6 +1,7 @@
 import { fetchNflScores } from "./odds.js";
 import { ingestCompletedScores } from "./results.js";
 import { repairMissingFinalsFromNflverse } from "./stale-results-repair.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -126,7 +127,7 @@ export async function weekResultsStatus(db, season, week, now = new Date()) {
     ORDER BY kickoff_at ASC
   `).bind(seasonNumber, weekNumber).all();
 
-  const rows = result.results ?? [];
+  const rows = dedupeCanonicalMatchups(result.results ?? []);
   let completedGames = 0;
   let awaitingCompletion = 0;
   const missing = [];

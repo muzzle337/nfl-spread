@@ -32,16 +32,16 @@ jobs:
               data=json.loads(sys.argv[1])
           except Exception:
               raise SystemExit(1)
-          raise SystemExit(0 if data.get('version') == '0.22.3' else 1)
+          raise SystemExit(0 if data.get('version') == '0.23.0' else 1)
           PY
             then
-              echo "Production is serving v0.22.3"
+              echo "Production is serving v0.23.0"
               exit 0
             fi
             echo "Attempt $attempt: waiting for Cloudflare deployment..."
             sleep 20
           done
-          echo "Production never served v0.22.3"
+          echo "Production never served v0.23.0"
           exit 1
 
       - name: Verify real Week 1 finals, postgame stats, and live tiers
@@ -95,7 +95,7 @@ jobs:
           import json,os
           data=json.loads(os.environ['HEALTH'])
           required={
-              'version':'0.22.3',
+              'version':'0.23.0',
               'canonicalShell':True,
               'canonicalBackendRouter':True,
               'survivorActive':False,
@@ -114,6 +114,14 @@ jobs:
               'historicalEvidenceAffectsFocus':False,
               'historicalEvidenceMaxItems':3,
               'historicalEvidenceCached':True,
+              'situationalTrends':True,
+              'situationalTrendOutcome':'outright',
+              'situationalTrendTimeframe':'2023-2025',
+              'situationalTrendMaxItems':2,
+              'situationalTrendsAffectFocus':False,
+              'situationalTrendsCached':True,
+              'rawPlayByPlayReadDuringUi':False,
+              'canonicalTeamAliases':True,
               'finalScoreProminent':True,
               'tierPercentVisibleOnCards':True,
               'gameCardStatusFirst':True,
@@ -130,6 +138,34 @@ jobs:
           if failed:
               print('failed=', failed)
               raise SystemExit(1)
+          PY
+
+      - name: Verify Phase 3 situation cache and canonical Week 2 schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nfl-spread-api.sanro4.workers.dev"
+          outlook="$(curl -fsS --max-time 45 "$BASE/api/pool/outlooks?season=2026&week=2")"
+          OUTLOOK="$outlook" python - <<'PY'
+          import json,os
+          data=json.loads(os.environ['OUTLOOK'])
+          games=data.get('games') or []
+          if len(games) != 16:
+              raise SystemExit(f"Expected 16 canonical Week 2 games, got {len(games)}")
+          duplicate=[g for g in games if g.get('awayTeam') in ('NYG','New York Giants') and g.get('homeTeam')=='LA']
+          if duplicate:
+              raise SystemExit('Legacy NYG @ LA duplicate is still present')
+          trends=[item for game in games for item in ((game.get('history') or {}).get('situational') or [])]
+          if not trends or any(len((game.get('history') or {}).get('situational') or []) > 2 for game in games):
+              raise SystemExit('Situational evidence is missing or exceeds the two-item cap')
+          required=('team','label','record','winPct','games','timeframe','baseline','relationship','outcomeType')
+          if any(any(key not in item for key in required) for item in trends):
+              raise SystemExit('A situational trend is missing required audit fields')
+          if any(item.get('outcomeType') != 'OUTRIGHT' for item in trends):
+              raise SystemExit('Situational outcomes are not explicitly outright')
+          if any((item.get('timeframe') or {}).get('fromSeason') != 2023 or (item.get('timeframe') or {}).get('toSeason') != 2025 for item in trends):
+              raise SystemExit('Unexpected situational timeframe')
+          print(f"Phase 3 payload passed with {len(trends)} trends across {len(games)} games")
           PY
 
       - name: Install dependencies

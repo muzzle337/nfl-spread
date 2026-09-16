@@ -1,4 +1,5 @@
 import { fetchNflverseSeason, teamCode } from "./context-sources.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 function clean(value) {
   const text = String(value ?? "").trim();
@@ -55,9 +56,10 @@ export async function importSeasonSchedule(db, season, { fetchImpl = fetch } = {
       SELECT id,away_team,home_team FROM games
       WHERE season=? AND week=? AND season_type='REGULAR'
     `).bind(game.season, game.week).all();
-    const existing = (existingRows.results ?? []).find((row) =>
+    const matching = (existingRows.results ?? []).filter((row) =>
       teamCode(row.away_team) === game.awayTeam && teamCode(row.home_team) === game.homeTeam
     );
+    const existing = dedupeCanonicalMatchups(matching.map((row)=>({...row,season:game.season,week:game.week})))[0] || null;
     const id = existing?.id || game.id;
     await db.prepare(`
       INSERT INTO games(id,season,week,season_type,away_team,home_team,kickoff_at,status,updated_at)

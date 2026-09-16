@@ -291,13 +291,15 @@ export async function historyStatus(db) {
   const totals = await db.prepare(`SELECT COUNT(*) games, MIN(season) min_season, MAX(season) max_season FROM historical_games`).first();
   const summaries = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM historical_coach_summaries`).first();
   const evidence = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM historical_evidence_summaries`).first();
+  const situational = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM situational_history_cache`).first();
   const latest = await db.prepare(`SELECT * FROM historical_import_runs ORDER BY id DESC LIMIT 1`).first();
   return {
     games: Number(totals?.games ?? 0),
     seasons: totals?.games ? { from: Number(totals.min_season), to: Number(totals.max_season) } : null,
     coachSummaries: Number(summaries?.summaries ?? 0),
     evidenceSummaries: Number(evidence?.summaries ?? 0),
-    summariesRebuiltAt: evidence?.rebuilt_at ?? summaries?.rebuilt_at ?? null,
+    situationalSnapshots: Number(situational?.summaries ?? 0),
+    summariesRebuiltAt: situational?.rebuilt_at ?? evidence?.rebuilt_at ?? summaries?.rebuilt_at ?? null,
     latestImport: latest ?? null
   };
 }
