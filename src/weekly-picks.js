@@ -3,7 +3,7 @@ import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 2;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 3;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -120,7 +120,13 @@ async function buildWeeklyOutlookBase(db,season,week){
   const [dash,ctx,moves]=await Promise.all([
     projectionsForWeek(db,season,week),contextForWeek(db,season,week),lineMovementsForWeek(db,season,week)
   ]);
-  const hist=await historicalIndicatorsForWeek(db,ctx.games||[],{startSeason:2015,endSeason:2025});
+  const dBy=new Map((dash.games||[]).map(g=>[g.id,g]));
+  const historyGames=(ctx.games||[]).map(c=>{
+    const d=dBy.get(c.gameId)||{};
+    const projectedCode=d.projectedTeam===c.awayTeam?c.awayCode:d.projectedTeam===c.homeTeam?c.homeCode:null;
+    return {...c,classification:d.classification||null,projectedCode};
+  });
+  const hist=await historicalIndicatorsForWeek(db,historyGames,{startSeason:2015,endSeason:2025});
   const cBy=new Map((ctx.games||[]).map(g=>[g.gameId,g]));
   const hBy=new Map((hist||[]).map(g=>[g.gameId,g]));
   const mBy=new Map((moves||[]).map(g=>[g.gameId,g]));
@@ -132,7 +138,7 @@ async function buildWeeklyOutlookBase(db,season,week){
       spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
       market:{awayMoneyline:g.moneyline?.consensusAwayMoneyline??null,homeMoneyline:g.moneyline?.consensusHomeMoneyline??null,awayWinPct:g.moneyline?.awayWinProbability??null,homeWinPct:g.moneyline?.homeWinProbability??null,bookmakers:g.moneyline?.moneylineBookmakerCount??0},
       movement:m?{...m,text:movementText(m)}:null,
-      history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount}:null,
+      history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0}}:null,
       context:c?{venue:[c.stadium,c.roof,c.surface].filter(Boolean).join(' · '),weather:c.weather,rest:{away:c.awayRest,home:c.homeRest},observations:c.observations||[],quality:c.quality}:null,
       outlook:label
     };

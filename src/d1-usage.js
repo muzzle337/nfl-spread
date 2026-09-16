@@ -1,5 +1,6 @@
 import { ensureHistorySchema } from './history-schema.js';
 import { coachIndicatorSummary } from './history.js';
+import { rebuildHistoricalEvidenceSummaries } from './historical-evidence.js';
 
 export async function rebuildStoredHistoricalSummaries(db,{startSeason=2015,endSeason=2025}={}){
   if(!db)throw new Error('Database is not bound');
@@ -14,16 +15,18 @@ export async function rebuildStoredHistoricalSummaries(db,{startSeason=2015,endS
     return db.prepare(`INSERT INTO historical_coach_summaries(coach,start_season,end_season,summary_json,rebuilt_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)`).bind(coach,startSeason,endSeason,JSON.stringify(summary));
   });
   for(let i=0;i<statements.length;i+=50)await db.batch(statements.slice(i,i+50));
+  const evidence=await rebuildHistoricalEvidenceSummaries(db,{teamStartSeason:Math.max(2023,startSeason),startSeason,endSeason});
   await db.prepare(`DELETE FROM weekly_outlook_cache`).run();
-  return {gamesReadOnce:rows.length,coachesCached:coaches.length,startSeason,endSeason,weeklyOutlookCacheInvalidated:true};
+  return {gamesReadForCoachCache:rows.length,coachesCached:coaches.length,evidence,startSeason,endSeason,weeklyOutlookCacheInvalidated:true};
 }
 
 export async function d1CacheStatus(db,season,week){
   if(!db)throw new Error('Database is not bound');
   await ensureHistorySchema(db);
-  const [hist,weekCache]=await Promise.all([
+  const [hist,evidence,weekCache]=await Promise.all([
     db.prepare(`SELECT COUNT(*) summaries,MAX(rebuilt_at) rebuilt_at FROM historical_coach_summaries WHERE start_season=2015 AND end_season=2025`).first(),
+    db.prepare(`SELECT COUNT(*) summaries,MAX(rebuilt_at) rebuilt_at FROM historical_evidence_summaries`).first(),
     Number.isInteger(Number(season))&&Number.isInteger(Number(week))?db.prepare(`SELECT built_at FROM weekly_outlook_cache WHERE season=? AND week=? LIMIT 1`).bind(Number(season),Number(week)).first():Promise.resolve(null)
   ]);
-  return {historicalCoachSummaries:Number(hist?.summaries||0),historicalSummariesRebuiltAt:hist?.rebuilt_at||null,weeklyOutlook:{season:Number(season)||null,week:Number(week)||null,cached:Boolean(weekCache),builtAt:weekCache?.built_at||null},guardrails:{backgroundHeavyPolling:false,rawHistoryReadDuringNormalUi:false,weeklyOutlookCached:true}};
+  return {historicalCoachSummaries:Number(hist?.summaries||0),historicalEvidenceSummaries:Number(evidence?.summaries||0),historicalSummariesRebuiltAt:evidence?.rebuilt_at||hist?.rebuilt_at||null,weeklyOutlook:{season:Number(season)||null,week:Number(week)||null,cached:Boolean(weekCache),builtAt:weekCache?.built_at||null},guardrails:{backgroundHeavyPolling:false,rawHistoryReadDuringNormalUi:'bootstrap_once_then_cached',weeklyOutlookCached:true}};
 }

@@ -1,4 +1,5 @@
 import { ensureHistorySchema } from "./history-schema.js";
+import { loadHistoricalEvidenceSummaries } from "./historical-evidence.js";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -40,11 +41,19 @@ export function currentHistoricalConditions(game) {
   if (awayRest !== null && homeRest !== null && awayRest - homeRest >= 3) away.push("restAdvantage3Plus");
   if (awayRest !== null && homeRest !== null && homeRest - awayRest >= 3) home.push("restAdvantage3Plus");
 
-  return { primeTime, outdoor, temperatureF: temp, windMph: wind, away, home };
+  const divisions = [
+    ["BUF","MIA","NE","NYJ"],["BAL","CIN","CLE","PIT"],["HOU","IND","JAX","TEN"],["DEN","KC","LV","LAC"],
+    ["DAL","NYG","PHI","WAS"],["CHI","DET","GB","MIN"],["ATL","CAR","NO","TB"],["ARI","LAR","SF","SEA"]
+  ];
+  const division = divisions.some((teams) => teams.includes(game.awayCode) && teams.includes(game.homeCode));
+  if (division) { away.push("division"); home.push("division"); }
+
+  return { primeTime, division, outdoor, temperatureF: temp, windMph: wind, away, home };
 }
 
 const LABELS = Object.freeze({
   primeTime: "Primetime",
+  division: "Division game",
   home: "Home games",
   away: "Road games",
   shortRest: "Short rest (6d or less)",
@@ -54,6 +63,15 @@ const LABELS = Object.freeze({
   hotOutdoor: "Hot outdoor (90°F+)",
   windyOutdoor: "Windy outdoor (15+ mph)"
 });
+
+const CATEGORY_LABELS = Object.freeze({
+  AwayFav: "Away Favorite",
+  AwayDog: "Away Dog",
+  HomeFav: "Home Favorite",
+  HomeDog: "Home Dog"
+});
+
+const TIER_LABELS = Object.freeze({ "<=3": "0.5–3", "<=7": "3.5–7", ">7": "7.5+" });
 
 function splitPayload(summary, key) {
   const split = summary?.indicators?.[key];
@@ -81,6 +99,74 @@ function sidePayload(code, coach, summary, keys) {
   };
 }
 
+function cachedSplit(summary, kind, key) {
+  if (!summary) return null;
+  return kind === "CATEGORY" ? summary.categoryTier?.[key] ?? null : summary.conditions?.[key] ?? null;
+}
+
+function evidenceCandidate({ subjectType, subjectLabel, team, split, baseline, label, priority, projectedCode }) {
+  const games = Number(split?.games || 0);
+  const coverPct = finite(split?.spreadRecord?.coverPct);
+  const baselineCoverPct = finite(baseline?.spreadRecord?.coverPct);
+  if (games < 5 || coverPct === null || baselineCoverPct === null) return null;
+  const baselineGames = Number(baseline?.games || 0);
+  const difference = Math.round((coverPct - baselineCoverPct) * 10) / 10;
+  let relationship = "NEUTRAL";
+  if (projectedCode && Math.abs(difference) >= 5) {
+    const subjectSupportsSelf = difference > 0;
+    relationship = (team === projectedCode) === subjectSupportsSelf ? "SUPPORTS" : "CONFLICTS";
+  }
+  return {
+    subjectType,
+    subjectLabel,
+    team,
+    label,
+    games,
+    spreadRecord: split.spreadRecord,
+    coverPct,
+    timeframe: null,
+    baseline: { games: baselineGames, coverPct: baselineCoverPct },
+    differenceFromBaseline: difference,
+    relationship,
+    priority: priority + (team === projectedCode ? 2 : 0)
+  };
+}
+
+export function phaseTwoEvidence(game, conditions, cache) {
+  if (!cache?.league) return [];
+  const projectedCode = game.projectedCode || null;
+  const candidates = [];
+  const add = (candidate, timeframe) => {
+    if (!candidate) return;
+    candidates.push({ ...candidate, timeframe });
+  };
+  for (const side of ["away", "home"]) {
+    const team = side === "away" ? game.awayCode : game.homeCode;
+    const coach = side === "away" ? game.awayCoach : game.homeCoach;
+    const teamSummary = cache.teams.get(team) || null;
+    const coachSummary = coach ? cache.coaches.get(coach) || null : null;
+    const classification = game.classification?.[side] || null;
+    const tier = game.classification?.tier || null;
+    if (classification && tier) {
+      const key = `${classification}|${tier}`;
+      const baseline = cachedSplit(cache.league, "CATEGORY", key);
+      const label = `${CATEGORY_LABELS[classification] || classification} · ${TIER_LABELS[tier] || tier}`;
+      add(evidenceCandidate({subjectType:"TEAM",subjectLabel:"Team",team,split:cachedSplit(teamSummary,"CATEGORY",key),baseline,label,priority:100,projectedCode}),teamSummary?.timeframe||null);
+      add(evidenceCandidate({subjectType:"COACH",subjectLabel:coach?`Coach · ${coach}`:"Coach",team,split:cachedSplit(coachSummary,"CATEGORY",key),baseline,label,priority:90,projectedCode}),coachSummary?.timeframe||null);
+    }
+    for (const key of conditions[side] || []) {
+      const baseline = cachedSplit(cache.league, "CONDITION", key);
+      const priority = key === "division" ? 75 : ["primeTime","shortRest","extraRest","restAdvantage3Plus","coldOutdoor","hotOutdoor","windyOutdoor"].includes(key) ? 65 : 45;
+      add(evidenceCandidate({subjectType:"TEAM",subjectLabel:"Team",team,split:cachedSplit(teamSummary,"CONDITION",key),baseline,label:LABELS[key]||key,priority,projectedCode}),teamSummary?.timeframe||null);
+      add(evidenceCandidate({subjectType:"COACH",subjectLabel:coach?`Coach · ${coach}`:"Coach",team,split:cachedSplit(coachSummary,"CONDITION",key),baseline,label:LABELS[key]||key,priority:priority-5,projectedCode}),coachSummary?.timeframe||null);
+    }
+  }
+  return candidates
+    .sort((a,b)=>b.priority-a.priority||String(a.team).localeCompare(String(b.team))||a.subjectType.localeCompare(b.subjectType))
+    .slice(0,3)
+    .map(({priority,...candidate})=>candidate);
+}
+
 async function loadSummaryMap(db, range) {
   await ensureHistorySchema(db);
   const startSeason = Number(range?.startSeason ?? 2015);
@@ -96,13 +182,14 @@ async function loadSummaryMap(db, range) {
   return map;
 }
 
-function buildCurrentGame(game, summaries) {
+function buildCurrentGame(game, summaries, evidenceCache) {
   const conditions = currentHistoricalConditions(game);
   const awaySummary = game.awayCoach ? summaries.get(game.awayCoach) || null : null;
   const homeSummary = game.homeCoach ? summaries.get(game.homeCoach) || null : null;
   const away = sidePayload(game.awayCode, game.awayCoach, awaySummary, conditions.away);
   const home = sidePayload(game.homeCode, game.homeCoach, homeSummary, conditions.home);
   const notableCount = away.notable.length + home.notable.length;
+  const evidence = phaseTwoEvidence(game, conditions, evidenceCache);
   return {
     gameId: game.gameId,
     awayCode: game.awayCode,
@@ -111,6 +198,12 @@ function buildCurrentGame(game, summaries) {
     conditions,
     away,
     home,
+    evidence,
+    evidenceSummary: {
+      supports: evidence.filter((item) => item.relationship === "SUPPORTS").length,
+      conflicts: evidence.filter((item) => item.relationship === "CONFLICTS").length,
+      neutral: evidence.filter((item) => item.relationship === "NEUTRAL").length
+    },
     notableCount,
     hasNotableHistory: notableCount > 0,
     historyCacheReady: away.cacheAvailable || home.cacheAvailable
@@ -118,11 +211,11 @@ function buildCurrentGame(game, summaries) {
 }
 
 export async function historicalIndicatorsForCurrentGame(db, game, range = { startSeason: 2015, endSeason: 2025 }) {
-  const summaries = await loadSummaryMap(db, range);
-  return buildCurrentGame(game, summaries);
+  const [summaries,evidenceCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db)]);
+  return buildCurrentGame(game, summaries, evidenceCache);
 }
 
 export async function historicalIndicatorsForWeek(db, games, range = { startSeason: 2015, endSeason: 2025 }) {
-  const summaries = await loadSummaryMap(db, range);
-  return (games || []).map((game) => buildCurrentGame(game, summaries));
+  const [summaries,evidenceCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db)]);
+  return (games || []).map((game) => buildCurrentGame(game, summaries, evidenceCache));
 }

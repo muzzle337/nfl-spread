@@ -31,8 +31,21 @@ try{
   const title=await page.locator('.detail-title').innerText();
   if(!/@/.test(title))throw new Error('Unexpected detail title: '+title);
 
+  await page.locator('.back').click();
+  await page.locator('[data-week-select]').selectOption('2');
+  await page.locator('.game-card').first().click();
+  const historical=page.locator('.detail-card').filter({hasText:'Historical Evidence'});
+  await historical.waitFor({state:'visible',timeout:30000});
+  const evidenceItems=historical.locator('.evidence-item');
+  const evidenceCount=await evidenceItems.count();
+  if(evidenceCount<1||evidenceCount>3)throw new Error('Expected 1-3 historical evidence items, got '+evidenceCount);
+  const historicalText=(await historical.innerText()).toUpperCase();
+  for(const requiredEvidence of ['ATS','NFL BASELINE']){
+    if(!historicalText.includes(requiredEvidence))throw new Error('Historical Evidence missing '+requiredEvidence);
+  }
+
   await page.screenshot({path:'production-game-detail-check.png',fullPage:true});
-  console.log('Rendered production Game Detail acceptance passed: '+title.replace(/\n/g,' · '));
+  console.log('Rendered production Game Detail acceptance passed with '+evidenceCount+' historical evidence items');
 }finally{
   await browser.close();
 }

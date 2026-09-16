@@ -5,7 +5,7 @@ import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
 test('v0.22 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.22.2');
+  assert.equal(APP_VERSION,'0.22.3');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -38,6 +38,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/QUALIFIED/);
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
+  assert.match(html,/\^\[A-Z\]\{2,3\}\$/);
+  assert.match(html,/NFL baseline/);
+  assert.match(html,/supporting/);
+  assert.match(html,/conflicting/);
   assert.match(html,/Expert Read/);
   assert.match(html,/Strategy/);
   assert.match(html,/Brain/);
@@ -118,7 +122,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.22.2');
+  assert.equal(body.version,'0.22.3');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -127,6 +131,12 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.moneylineMovementSummary,true);
   assert.equal(body.marketAlignment,true);
   assert.equal(body.movementUsesStoredSnapshotsOnly,true);
+  assert.equal(body.teamHistoricalEvidence,true);
+  assert.equal(body.currentCoachHistoricalEvidence,true);
+  assert.equal(body.leagueHistoricalBaseline,true);
+  assert.equal(body.historicalEvidenceAffectsFocus,false);
+  assert.equal(body.historicalEvidenceMaxItems,3);
+  assert.equal(body.historicalEvidenceCached,true);
   assert.equal(body.seasonTierMomentum,true);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
@@ -141,7 +151,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.22\.2"/);
+  assert.match(script,/VERSION = "0\.22\.3"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });

@@ -52,6 +52,16 @@ export async function ensureHistorySchema(db) {
       rebuilt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY(coach,start_season,end_season)
     )`,
+    `CREATE TABLE IF NOT EXISTS historical_evidence_summaries (
+      subject_type TEXT NOT NULL,
+      subject_key TEXT NOT NULL,
+      start_season INTEGER NOT NULL,
+      end_season INTEGER NOT NULL,
+      summary_json TEXT NOT NULL,
+      rebuilt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(subject_type,subject_key,start_season,end_season)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_historical_evidence_range ON historical_evidence_summaries(subject_type,start_season,end_season)`,
     `CREATE TABLE IF NOT EXISTS weekly_outlook_cache (
       season INTEGER NOT NULL,
       week INTEGER NOT NULL,
