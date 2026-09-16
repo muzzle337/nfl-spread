@@ -1,4 +1,5 @@
 import { ensureHistorySchema } from "./history-schema.js";
+import { rebuildHistoricalEvidenceSummaries } from "./historical-evidence.js";
 
 const NFLVERSE_SCHEDULES_CSV = "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv";
 
@@ -248,6 +249,7 @@ export async function importHistoricalGames(db, { startSeason = 2015, endSeason 
     imported += statements.length;
   }
   const cache = await rebuildHistoricalCoachSummaries(db,games,{startSeason,endSeason});
+  const evidenceCache = await rebuildHistoricalEvidenceSummaries(db,{teamStartSeason:Math.max(2023,startSeason),startSeason,endSeason});
   await db.prepare(`DELETE FROM weekly_outlook_cache`).run();
   await db.prepare(`INSERT INTO historical_import_runs(start_season, end_season, games_imported, source_rows) VALUES (?, ?, ?, ?)`)
     .bind(startSeason, endSeason, imported, sourceRows.length).run();
@@ -257,6 +259,7 @@ export async function importHistoricalGames(db, { startSeason = 2015, endSeason 
     gamesImported: imported,
     sourceRows: sourceRows.length,
     coachesCached: cache.coachesCached,
+    evidenceCache,
     weeklyOutlookCacheInvalidated: true,
     source: "nflverse",
     fields: ["coach", "spread", "score", "rest", "roof", "surface", "temperature", "wind", "stadium", "kickoff", "primetime"]
@@ -287,12 +290,14 @@ export async function historyStatus(db) {
   await ensureHistorySchema(db);
   const totals = await db.prepare(`SELECT COUNT(*) games, MIN(season) min_season, MAX(season) max_season FROM historical_games`).first();
   const summaries = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM historical_coach_summaries`).first();
+  const evidence = await db.prepare(`SELECT COUNT(*) summaries, MAX(rebuilt_at) rebuilt_at FROM historical_evidence_summaries`).first();
   const latest = await db.prepare(`SELECT * FROM historical_import_runs ORDER BY id DESC LIMIT 1`).first();
   return {
     games: Number(totals?.games ?? 0),
     seasons: totals?.games ? { from: Number(totals.min_season), to: Number(totals.max_season) } : null,
     coachSummaries: Number(summaries?.summaries ?? 0),
-    summariesRebuiltAt: summaries?.rebuilt_at ?? null,
+    evidenceSummaries: Number(evidence?.summaries ?? 0),
+    summariesRebuiltAt: evidence?.rebuilt_at ?? summaries?.rebuilt_at ?? null,
     latestImport: latest ?? null
   };
 }

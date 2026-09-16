@@ -87,7 +87,14 @@ function outlookGame(g){
       direction:away?'TOWARD_AWAY':'TOWARD_HOME',bookmakerCount:8,changedBookmakers:6,
       towardAwayBookmakers:away?6:1,towardHomeBookmakers:away?0:5
     }},
-    history:{away:{notable:[{label:'Road games',games:12,winPct:58,coverPct:62}]},home:{notable:[{label:'Home games',games:10,winPct:60,coverPct:55}]}},
+    history:{
+      away:{notable:[{label:'Road games',games:12,winPct:58,coverPct:62}]},home:{notable:[{label:'Home games',games:10,winPct:60,coverPct:55}]},
+      evidence:[
+        {team:away?g.awayTeam==='Buffalo Bills'?'BUF':g.awayTeam==='Denver Broncos'?'DEN':'SF':g.homeTeam==='Kansas City Chiefs'?'KC':'HOU',subjectLabel:'Team',label:away?'Away Favorite · 0.5–3':'Home Favorite · 0.5–3',games:11,spreadRecord:{covers:7,noCovers:4,pushes:0},coverPct:63.6,timeframe:{fromSeason:2023,toSeason:2025},baseline:{games:130,coverPct:51.2},relationship:'SUPPORTS'},
+        {team:away?g.homeTeam==='Houston Texans'?'HOU':'LAR':g.awayTeam==='Denver Broncos'?'DEN':'BUF',subjectLabel:'Coach · Example Coach',label:away?'Home Dog · 0.5–3':'Away Dog · 0.5–3',games:8,spreadRecord:{covers:5,noCovers:3,pushes:0},coverPct:62.5,timeframe:{fromSeason:2022,toSeason:2025},baseline:{games:130,coverPct:48.8},relationship:'CONFLICTS'}
+      ],
+      evidenceSummary:{supports:1,conflicts:1,neutral:0}
+    },
     context:{observations:[{kind:'supporting',label:'Rest edge',detail:'3 additional rest days',side:away?'AWAY':'HOME'}]},
     pick:g.final?g.awayTeam:null,pickResult:g.final?'CORRECT':null,final:g.final
   };
@@ -206,6 +213,7 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
   await expect(matchup).toContainText('Strategy');
   await expect(matchup).toContainText('Brain');
   await expect(matchup).toContainText('History');
+  await expect(matchup).toContainText('1 supporting · 1 conflicting');
   await expect(matchup).toContainText('Context');
   await expect(matchup.getByText('Open full game analysis ›')).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>({scrollX,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth}))).toEqual({scrollX:0,overflow:0});
@@ -224,6 +232,9 @@ test('Game Detail explains market, thesis, Brain, history and context',async({pa
   await expect(page.getByText('EXPERT READ')).toBeVisible();
   await expect(page.getByText('Brain',{exact:true})).toBeVisible();
   await expect(page.getByText('HISTORICAL EVIDENCE')).toBeVisible();
+  await expect(page.getByText('Supports BUF · BUF · Team')).toBeVisible();
+  await expect(page.getByText('Away Favorite · 0.5–3 · 7-4 ATS · 63.6% · n=11 · 2023–2025')).toBeVisible();
+  await expect(page.getByText('NFL baseline 51.2%')).toBeVisible();
   await expect(page.locator('.evidence-item').filter({hasText:'Supports BUF · Rest edge'})).toBeVisible();
   const details=page.locator('.books details');
   await expect(details).not.toHaveAttribute('open','');
