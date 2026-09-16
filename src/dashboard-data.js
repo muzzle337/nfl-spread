@@ -2,6 +2,7 @@ import { projectionsForWeek } from "./projection.js";
 import { weekResultsStatus } from "./result-sync.js";
 import { settleAgainstSpread } from "./engine.js";
 import { seasonTierPulse } from "./tier-contributors.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -72,21 +73,22 @@ export async function resolveDashboardWeek(db) {
   if (!Number.isInteger(season)) return { season: null, week: null };
 
   const result = await db.prepare(`
-    SELECT
-      week,
-      COUNT(*) AS total_games,
-      COALESCE(SUM(CASE WHEN status = 'COMPLETED' AND away_score IS NOT NULL AND home_score IS NOT NULL THEN 1 ELSE 0 END), 0) AS completed_games
+    SELECT id,season,week,away_team,home_team,status,away_score,home_score
     FROM games
     WHERE season = ? AND season_type = 'REGULAR'
-    GROUP BY week
-    ORDER BY week ASC
+    ORDER BY week ASC,id ASC
   `).bind(season).all();
 
-  const weeks = (result.results ?? []).map((row) => ({
-    week: Number(row.week),
-    totalGames: Number(row.total_games ?? 0),
-    completedGames: Number(row.completed_games ?? 0)
-  })).filter((row) => Number.isInteger(row.week));
+  const byWeek = new Map();
+  for (const row of dedupeCanonicalMatchups(result.results ?? [])) {
+    const week = Number(row.week);
+    if (!Number.isInteger(week)) continue;
+    const summary = byWeek.get(week) ?? { week, totalGames:0, completedGames:0 };
+    summary.totalGames += 1;
+    if (row.status === "COMPLETED" && row.away_score != null && row.home_score != null) summary.completedGames += 1;
+    byWeek.set(week,summary);
+  }
+  const weeks = [...byWeek.values()].sort((a,b)=>a.week-b.week);
 
   if (!weeks.length) return { season, week: null };
 

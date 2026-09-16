@@ -16,3 +16,10 @@ test("season schedule normalization keeps regular weeks browsable without market
 test("schedule kickoff converts winter eastern time after daylight saving", () => {
   assert.equal(scheduleKickoff({ gameday: "2026-12-20", gametime: "13:00" }), "2026-12-20T18:00:00.000Z");
 });
+
+test("season schedule canonicalizes nflverse LA to LAR", () => {
+  const [game] = normalizeSeasonSchedule([
+    { game_id:"2026_02_NYG_LA",week:"2",gameday:"2026-09-21",gametime:"20:15",away_team:"NYG",home_team:"LA" }
+  ],2026);
+  assert.equal(game.homeTeam,"LAR");
+});

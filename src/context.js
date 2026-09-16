@@ -1,4 +1,5 @@
 import { ensureContextSchema } from "./context-schema.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 import {
   fetchKickoffWeather,
   fetchNfldataGames,
@@ -28,7 +29,7 @@ async function storedGames(db, season, week) {
     WHERE season = ? AND week = ? AND season_type = 'REGULAR'
     ORDER BY kickoff_at ASC, id ASC
   `).bind(season, week).all();
-  return result.results ?? [];
+  return dedupeCanonicalMatchups(result.results ?? []);
 }
 
 function sourceMatch(rows, game) {

@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
-test('v0.22 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.22.3');
+test('v0.23 serves one canonical four-screen shell',async()=>{
+  assert.equal(APP_VERSION,'0.23.0');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -38,6 +38,8 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/QUALIFIED/);
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
+  assert.match(html,/Situational Trends/);
+  assert.match(html,/outright/);
   assert.match(html,/\^\[A-Z\]\{2,3\}\$/);
   assert.match(html,/NFL baseline/);
   assert.match(html,/supporting/);
@@ -122,7 +124,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.22.3');
+  assert.equal(body.version,'0.23.0');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -137,6 +139,14 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.historicalEvidenceAffectsFocus,false);
   assert.equal(body.historicalEvidenceMaxItems,3);
   assert.equal(body.historicalEvidenceCached,true);
+  assert.equal(body.situationalTrends,true);
+  assert.equal(body.situationalTrendOutcome,'outright');
+  assert.equal(body.situationalTrendTimeframe,'2023-2025');
+  assert.equal(body.situationalTrendMaxItems,2);
+  assert.equal(body.situationalTrendsAffectFocus,false);
+  assert.equal(body.situationalTrendsCached,true);
+  assert.equal(body.rawPlayByPlayReadDuringUi,false);
+  assert.equal(body.canonicalTeamAliases,true);
   assert.equal(body.seasonTierMomentum,true);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
@@ -151,7 +161,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.22\.3"/);
+  assert.match(script,/VERSION = "0\.23\.0"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });

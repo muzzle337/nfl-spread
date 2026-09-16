@@ -1,5 +1,6 @@
 import { ensureHistorySchema } from "./history-schema.js";
 import { loadHistoricalEvidenceSummaries } from "./historical-evidence.js";
+import { loadSituationalHistory, situationalEvidenceForGame, situationalSummary } from "./situational-history.js";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -182,7 +183,7 @@ async function loadSummaryMap(db, range) {
   return map;
 }
 
-function buildCurrentGame(game, summaries, evidenceCache) {
+function buildCurrentGame(game, summaries, evidenceCache, situationalCache) {
   const conditions = currentHistoricalConditions(game);
   const awaySummary = game.awayCoach ? summaries.get(game.awayCoach) || null : null;
   const homeSummary = game.homeCoach ? summaries.get(game.homeCoach) || null : null;
@@ -190,6 +191,7 @@ function buildCurrentGame(game, summaries, evidenceCache) {
   const home = sidePayload(game.homeCode, game.homeCoach, homeSummary, conditions.home);
   const notableCount = away.notable.length + home.notable.length;
   const evidence = phaseTwoEvidence(game, conditions, evidenceCache);
+  const situational = situationalEvidenceForGame(game, situationalCache);
   return {
     gameId: game.gameId,
     awayCode: game.awayCode,
@@ -204,6 +206,8 @@ function buildCurrentGame(game, summaries, evidenceCache) {
       conflicts: evidence.filter((item) => item.relationship === "CONFLICTS").length,
       neutral: evidence.filter((item) => item.relationship === "NEUTRAL").length
     },
+    situational,
+    situationalSummary: situationalSummary(situational),
     notableCount,
     hasNotableHistory: notableCount > 0,
     historyCacheReady: away.cacheAvailable || home.cacheAvailable
@@ -211,11 +215,11 @@ function buildCurrentGame(game, summaries, evidenceCache) {
 }
 
 export async function historicalIndicatorsForCurrentGame(db, game, range = { startSeason: 2015, endSeason: 2025 }) {
-  const [summaries,evidenceCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db)]);
-  return buildCurrentGame(game, summaries, evidenceCache);
+  const [summaries,evidenceCache,situationalCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db),loadSituationalHistory(db)]);
+  return buildCurrentGame(game, summaries, evidenceCache, situationalCache);
 }
 
 export async function historicalIndicatorsForWeek(db, games, range = { startSeason: 2015, endSeason: 2025 }) {
-  const [summaries,evidenceCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db)]);
-  return (games || []).map((game) => buildCurrentGame(game, summaries, evidenceCache));
+  const [summaries,evidenceCache,situationalCache] = await Promise.all([loadSummaryMap(db, range),loadHistoricalEvidenceSummaries(db),loadSituationalHistory(db)]);
+  return (games || []).map((game) => buildCurrentGame(game, summaries, evidenceCache, situationalCache));
 }

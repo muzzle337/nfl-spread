@@ -1,3 +1,5 @@
+import { canonicalTeamCode } from "./team-codes.js";
+
 const NFLVERSE_SCHEDULES_CSV = "https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv";
 const NFLDATA_BASE = "https://api.nfldata.org/v1";
 const OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast";
@@ -13,7 +15,7 @@ const STADIUM_COORDS = Object.freeze({
 
 export function teamCode(value) {
   const clean = String(value ?? "").trim();
-  return TEAM_CODES[clean] ?? clean.toUpperCase();
+  return canonicalTeamCode(TEAM_CODES[clean] ?? clean);
 }
 
 function numberOrNull(value) {

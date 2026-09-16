@@ -3,7 +3,7 @@ import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 3;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 4;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -138,7 +138,7 @@ async function buildWeeklyOutlookBase(db,season,week){
       spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
       market:{awayMoneyline:g.moneyline?.consensusAwayMoneyline??null,homeMoneyline:g.moneyline?.consensusHomeMoneyline??null,awayWinPct:g.moneyline?.awayWinProbability??null,homeWinPct:g.moneyline?.homeWinProbability??null,bookmakers:g.moneyline?.moneylineBookmakerCount??0},
       movement:m?{...m,text:movementText(m)}:null,
-      history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0}}:null,
+      history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0},situational:h.situational||[],situationalSummary:h.situationalSummary||{supports:0,conflicts:0,neutral:0}}:null,
       context:c?{venue:[c.stadium,c.roof,c.surface].filter(Boolean).join(' · '),weather:c.weather,rest:{away:c.awayRest,home:c.homeRest},observations:c.observations||[],quality:c.quality}:null,
       outlook:label
     };
