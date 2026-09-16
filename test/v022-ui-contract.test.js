@@ -38,6 +38,7 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/QUALIFIED/);
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
+  assert.match(html,/\^\[A-Z\]\{2,3\}\$/);
   assert.match(html,/NFL baseline/);
   assert.match(html,/supporting/);
   assert.match(html,/conflicting/);
