@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
-test('v0.23 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.23.0');
+test('v0.24 serves one canonical four-screen shell',async()=>{
+  assert.equal(APP_VERSION,'0.24.0');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -25,7 +25,7 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.equal(scripts.length,1);
   scripts.forEach(script=>assert.doesNotThrow(()=>new Function(script)));
 
-  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
+  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+performance\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
   assert.match(html,/function games\(\).*gamesSection\(\)/);
   assert.match(html,/function picks\(\)/);
   assert.match(html,/data-week-select/);
@@ -39,6 +39,11 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Current Market/);
   assert.match(html,/Historical Evidence/);
   assert.match(html,/Situational Trends/);
+  assert.match(html,/Signal Performance/);
+  assert.match(html,/frozen pregame/);
+  assert.match(html,/ATS and outright results stay separate/);
+  assert.match(html,/data-signal/);
+  assert.match(html,/Season signal tracking/);
   assert.match(html,/outright/);
   assert.match(html,/\^\[A-Z\]\{2,3\}\$/);
   assert.match(html,/NFL baseline/);
@@ -75,6 +80,7 @@ test('canonical shell uses approved APIs without recurring background refresh',(
   assert.match(html,/q\('\/api\/focus\/opportunities'\)/);
   assert.match(html,/\/api\/data\/freshness/);
   assert.match(html,/\/api\/tiers\/contributors/);
+  assert.match(html,/\/api\/signals\/performance/);
   assert.match(html,/\/api\/schedule\/nfl/);
   assert.match(html,/\/api\/ingest\/nfl\/results/);
   assert.match(html,/\/api\/ingest\/nfl/);
@@ -124,7 +130,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.23.0');
+  assert.equal(body.version,'0.24.0');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -145,6 +151,12 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.situationalTrendMaxItems,2);
   assert.equal(body.situationalTrendsAffectFocus,false);
   assert.equal(body.situationalTrendsCached,true);
+  assert.equal(body.signalPerformanceTracking,true);
+  assert.equal(body.signalPerformanceStartVersion,'0.24.0');
+  assert.equal(body.pregameSignalSnapshots,true);
+  assert.equal(body.signalPerformanceAffectsFocus,false);
+  assert.equal(body.signalPerformanceAffectsPicks,false);
+  assert.equal(body.signalPerformanceUsesStoredDataOnly,true);
   assert.equal(body.rawPlayByPlayReadDuringUi,false);
   assert.equal(body.canonicalTeamAliases,true);
   assert.equal(body.seasonTierMomentum,true);
@@ -161,7 +173,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.23\.0"/);
+  assert.match(script,/VERSION = "0\.24\.0"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });

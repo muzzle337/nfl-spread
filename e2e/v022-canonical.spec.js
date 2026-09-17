@@ -109,7 +109,22 @@ function pool(week){
   const games=dashboard(week).games.map(outlookGame);
   const cached=games.find(game=>game.gameId==='g2');
   if(cached)cached.spread.sampleSize=0;
-  return {ok:true,season:2026,week,summary:{correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)},games};
+  return {ok:true,season:2026,week,summary:{correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)},games,performance:signalPerformance()};
+}
+
+function signalPerformance(selected=null){
+  const signals=[
+    {id:'TIER_EDGE',label:'Tier edge',metric:'ATS',wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100,weeks:[{week:1,wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100}]},
+    {id:'MARKET_ALIGNED',label:'Tier + market aligned',metric:'ATS',wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100,weeks:[{week:1,wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100}]},
+    {id:'HISTORICAL_SUPPORT',label:'Historical support',metric:'ATS',wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100,weeks:[{week:1,wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100}]},
+    {id:'SITUATIONAL_SUPPORT',label:'Situational support',metric:'OUTRIGHT',wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100,weeks:[{week:1,wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100}]},
+    {id:'OUTRIGHT_OUTLOOK',label:'Outright outlook',metric:'OUTRIGHT',wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100,weeks:[{week:1,wins:1,losses:0,pushes:0,pending:1,decisions:1,rate:100}]}
+  ];
+  const contributors=selected?[
+    {signal:selected,metric:selected==='SITUATIONAL_SUPPORT'||selected==='OUTRIGHT_OUTLOOK'?'OUTRIGHT':'ATS',team:'San Francisco 49ers',outcome:'WIN',gameId:'g1',week:1,kickoffAt:'2026-09-11T00:20:00Z',awayTeam:'San Francisco 49ers',homeTeam:'Los Angeles Rams',awayScore:27,homeScore:7},
+    {signal:selected,metric:selected==='SITUATIONAL_SUPPORT'||selected==='OUTRIGHT_OUTLOOK'?'OUTRIGHT':'ATS',team:'Buffalo Bills',outcome:'PENDING',gameId:'g2',week:1,kickoffAt:'2026-09-15T17:00:00Z',awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:null,homeScore:null}
+  ]:undefined;
+  return {season:2026,trackingStartedVersion:'0.24.0',snapshotCount:2,signals,contributors};
 }
 
 function focus(week){
@@ -129,6 +144,7 @@ test.beforeEach(async({page})=>{
     if(url.pathname==='/api/focus/opportunities')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(focus(week))});
     if(url.pathname==='/api/data/freshness')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,state:'CURRENT'})});
     if(url.pathname==='/api/pool/outlooks')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(pool(week))});
+    if(url.pathname==='/api/signals/performance')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(signalPerformance(url.searchParams.get('signal')))});
     if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:1,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,momentum:seasonPulse.momentum['AwayFav|<=3'],games:[
       {id:'c1',week:1,awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:24,homeScore:20,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
       {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'},
@@ -165,6 +181,21 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page.locator('.game-card')).toContainText('BUF');
   await page.screenshot({path:'test-results/v022-tier-filter.png',fullPage:true});
+});
+
+test('Dashboard tracks frozen pregame signal results and opens every contributor',async({page})=>{
+  await expect(page.getByText('SIGNAL PERFORMANCE')).toBeVisible();
+  await expect(page.getByText('Tracks whether displayed signals worked after kickoff. ATS and outright results stay separate.')).toBeVisible();
+  const tier=page.locator('[data-signal="TIER_EDGE"]');
+  await expect(tier).toContainText('Tier edge');
+  await expect(tier).toContainText('ATS · 1-0 · n=1');
+  await expect(tier).toContainText('1 pending');
+  await tier.click();
+  await expect(page.getByText('Tier edge · Season signal tracking')).toBeVisible();
+  await expect(page.getByText('WEEKLY RESULTS')).toBeVisible();
+  await expect(page.getByText('ALL TRACKED GAMES · 2')).toBeVisible();
+  await expect(page.locator('[data-performance-game]')).toHaveCount(2);
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);
 });
 
 test('Week selector loads the known Week 2 schedule before Week 1 is complete',async({page})=>{
