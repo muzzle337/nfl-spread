@@ -52,6 +52,10 @@ The app also shows how many points the consensus moved, which team the market mo
 
 Line movement is calculated entirely from D1 data we already store. Viewing it costs no Odds API credits.
 
+## Signal performance
+
+Starting with v0.24.0, the app freezes the latest displayed signal state before kickoff and grades it after the game. The Dashboard keeps ATS signals separate from outright signals, shows weekly and season records, and lets each row open every contributing game. This scorecard is observational: it does not modify Focus grades, tier percentages, or weekly picks, and it reads only stored D1 data.
+
 ## Automatic updates
 
 Spread refresh checks run hourly, but D1 is checked first and the paid Odds API is only called when the market data is due for a refresh.

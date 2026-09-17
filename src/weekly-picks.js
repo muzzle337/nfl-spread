@@ -2,8 +2,9 @@ import { projectionsForWeek } from "./projection.js";
 import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
+import { capturePregameSignalSnapshots } from "./signal-performance.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 4;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 5;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -135,6 +136,7 @@ async function buildWeeklyOutlookBase(db,season,week){
     const label=outlookLabel(g,h,null);
     return {
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
+      classification:g.classification||null,
       spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
       market:{awayMoneyline:g.moneyline?.consensusAwayMoneyline??null,homeMoneyline:g.moneyline?.consensusHomeMoneyline??null,awayWinPct:g.moneyline?.awayWinProbability??null,homeWinPct:g.moneyline?.homeWinProbability??null,bookmakers:g.moneyline?.moneylineBookmakerCount??0},
       movement:m?{...m,text:movementText(m)}:null,
@@ -181,6 +183,7 @@ export async function weeklyOutlookCacheStatus(db,season,week){
 
 export async function weeklyGameOutlooks(db,season,week){
   const base=await cachedWeeklyOutlookBase(db,season,week);
+  await capturePregameSignalSnapshots(db,season,week,base.games,new Date());
   const [picks,results]=await Promise.all([listWeeklyPicks(db,season,week),resultsForWeek(db,season,week)]);
   const pBy=new Map((picks||[]).map(p=>[p.gameId,p]));
   const games=(base.games||[]).map(g=>{

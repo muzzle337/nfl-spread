@@ -32,6 +32,7 @@ import {
 import { APP_VERSION, canonicalAppPage } from './v022-ui.js';
 import { importSeasonSchedule } from './schedule-sync.js';
 import { tierContributors } from './tier-contributors.js';
+import { signalPerformance } from './signal-performance.js';
 
 const RESULTS_REFRESH_CRON='15 12 * * *';
 const corsHeaders={
@@ -228,12 +229,13 @@ async function poolRoute(request,env,url){
     const target=await targetWeek(env,url);
     if(!Number.isInteger(target.season)||!Number.isInteger(target.week))return json({error:'No active NFL week is available'},400);
     try{
-      const [games,summary]=await Promise.all([
-        weeklyGameOutlooks(env.DB,target.season,target.week),
-        poolSeasonSummary(env.DB,target.season)
+      const games=await weeklyGameOutlooks(env.DB,target.season,target.week);
+      const [summary,performance]=await Promise.all([
+        poolSeasonSummary(env.DB,target.season),
+        signalPerformance(env.DB,target.season)
       ]);
       return json({
-        ok:true,season:target.season,week:target.week,games,summary,
+        ok:true,season:target.season,week:target.week,games,summary,performance,
         principle:'Game Outlook explains agreement and conflict across market, current-season spread, history and context. It does not manufacture a new probability.',
         percentageLabel:'market_no_vig_win_probability'
       });
@@ -468,6 +470,14 @@ async function coreDataRoute(request,env,url){
     catch(error){return json({error:'Tier contributors unavailable',message:error.message},400)}
   }
 
+  if(url.pathname==='/api/signals/performance'&&request.method==='GET'){
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=Number(url.searchParams.get('season'));
+    const signal=url.searchParams.get('signal')||null;
+    try{return json({ok:true,...await signalPerformance(env.DB,season,signal)})}
+    catch(error){return json({error:'Signal performance unavailable',message:error.message},400)}
+  }
+
   if(url.pathname==='/api/usage'&&request.method==='GET'){
     try{return json({ok:true,...await usageSummary(env)})}
     catch(error){return json({error:'Usage data unavailable',message:error.message},503)}
@@ -520,6 +530,12 @@ async function healthRoute(env){
     situationalTrendMaxItems:2,
     situationalTrendsAffectFocus:false,
     situationalTrendsCached:true,
+    signalPerformanceTracking:true,
+    signalPerformanceStartVersion:'0.24.0',
+    pregameSignalSnapshots:true,
+    signalPerformanceAffectsFocus:false,
+    signalPerformanceAffectsPicks:false,
+    signalPerformanceUsesStoredDataOnly:true,
     rawPlayByPlayReadDuringUi:false,
     canonicalTeamAliases:true,
     opportunityEdgeFocus:true,
