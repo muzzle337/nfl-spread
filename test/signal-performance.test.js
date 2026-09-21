@@ -36,7 +36,7 @@ test("snapshot records the displayed pregame thesis without postgame fields",()=
     history:{evidenceSummary:{supports:2,conflicts:1},situationalSummary:{supports:1,conflicts:1}},
     outlook:{team:"BUF"},final:{awayScore:24,homeScore:20}
   });
-  assert.deepEqual(snapshot.market,{alignment:"ALIGNED",movementTeam:"BUF"});
+  assert.deepEqual(snapshot.market,{alignment:"ALIGNED",movementTeam:"BUF",awayMoneyline:null,homeMoneyline:null,awayWinPct:null,homeWinPct:null});
   assert.equal(snapshot.projectedClassification,"AwayFav");
   assert.equal(snapshot.historical.supports,2);
   assert.equal(snapshot.situational.supports,1);
@@ -67,7 +67,7 @@ test("ATS and outright signals are graded separately from the frozen snapshot",(
   });
   const pending=payload({gameId:"g3",awayTeam:"NYG",homeTeam:"LAR",projectedTeam:"NYG",market:{alignment:"ALIGNED",movementTeam:"NYG"},outrightTeam:"LAR"});
   const graded=gradeSignalRows([
-    stored("g1",1,first),
+    stored("g1",1,first,{away_spread:-10}),
     stored("g2",1,second,{away_team:"DEN",home_team:"KC",away_score:20,home_score:24,away_spread:3}),
     stored("g3",2,pending,{away_team:"NYG",home_team:"LAR",status:"SCHEDULED",away_score:null,home_score:null,away_spread:7})
   ]);
