@@ -33,6 +33,7 @@ import { APP_VERSION, canonicalAppPage } from './v022-ui.js';
 import { importSeasonSchedule } from './schedule-sync.js';
 import { tierContributors } from './tier-contributors.js';
 import { signalPerformance } from './signal-performance.js';
+import { reconcilePregameMarkets } from './pregame-markets.js';
 
 const RESULTS_REFRESH_CRON='15 12 * * *';
 const corsHeaders={
@@ -122,6 +123,18 @@ async function adminSessionRoute(request,env,url){
 }
 
 async function marketRoute(request,env,url){
+  if(url.pathname==='/api/markets/reconcile'&&request.method==='POST'){
+    const auth=await requireAdmin(request,env);
+    if(!auth.ok)return json({error:auth.error},auth.status);
+    if(!env.DB)return json({error:'Database is not bound'},503);
+    const season=Number(url.searchParams.get('season'));
+    const week=url.searchParams.has('week')?Number(url.searchParams.get('week')):null;
+    try{
+      const reconciliation=await reconcilePregameMarkets(env.DB,{season,week});
+      await invalidateWeeklyOutlookCache(env.DB);
+      return json({ok:true,reconciliation,cacheInvalidated:true});
+    }catch(error){return json({error:'Unable to reconcile pregame markets',message:error.message},400)}
+  }
   if(url.pathname==='/api/schedule/nfl'&&request.method==='POST'){
     const auth=await requireAdmin(request,env);
     if(!auth.ok)return json({error:auth.error},auth.status);
@@ -235,7 +248,7 @@ async function poolRoute(request,env,url){
         signalPerformance(env.DB,target.season)
       ]);
       return json({
-        ok:true,season:target.season,week:target.week,games,summary,performance,
+        ok:true,season:target.season,week:target.week,games,summary,weekSummary:summary.weeks.find((row)=>row.week===target.week)??{week:target.week,correct:0,wrong:0,pending:0},performance,
         principle:'Game Outlook explains agreement and conflict across market, current-season spread, history and context. It does not manufacture a new probability.',
         percentageLabel:'market_no_vig_win_probability'
       });
@@ -536,6 +549,9 @@ async function healthRoute(env){
     signalPerformanceAffectsFocus:false,
     signalPerformanceAffectsPicks:false,
     signalPerformanceUsesStoredDataOnly:true,
+    pregameMarketIntegrity:true,
+    postKickoffMarketsRejected:true,
+    signalGradingUsesRecommendationLine:true,
     rawPlayByPlayReadDuringUi:false,
     canonicalTeamAliases:true,
     opportunityEdgeFocus:true,
