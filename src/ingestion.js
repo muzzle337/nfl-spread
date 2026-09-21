@@ -1,5 +1,6 @@
 import { ensureMarketSchema } from "./market-schema.js";
 import { teamCode } from "./context-sources.js";
+import { isPregameSnapshot, reconcileGamePregameMarkets } from "./pregame-markets.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -79,9 +80,10 @@ async function latestSpreadForSource(db, gameId, source) {
     SELECT away_spread
     FROM line_snapshots
     WHERE game_id = ? AND source = ?
+      AND julianday(captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
     ORDER BY id DESC
     LIMIT 1
-  `).bind(gameId, source).first();
+  `).bind(gameId, source, gameId).first();
 }
 
 async function latestMoneylineForSource(db, gameId, source) {
@@ -89,9 +91,10 @@ async function latestMoneylineForSource(db, gameId, source) {
     SELECT away_moneyline, home_moneyline
     FROM moneyline_snapshots
     WHERE game_id = ? AND source = ?
+      AND julianday(captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
     ORDER BY id DESC
     LIMIT 1
-  `).bind(gameId, source).first();
+  `).bind(gameId, source, gameId).first();
 }
 
 export async function ingestWeeklySpreads(db, games, now = new Date(), requested = null) {
@@ -116,6 +119,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date(), requested
   let snapshotsUnchanged = 0;
   let moneylineSnapshotsInserted = 0;
   let moneylineSnapshotsUnchanged = 0;
+  let postKickoffMarketsRejected = 0;
 
   for (const game of selection.games) {
     const stored = await db.prepare(`
@@ -146,6 +150,11 @@ export async function ingestWeeklySpreads(db, games, now = new Date(), requested
     gamesUpserted += 1;
 
     for (const book of game.books ?? []) {
+      const capturedAt = book.lastUpdate ?? (now instanceof Date ? now : new Date(now)).toISOString();
+      if (!isPregameSnapshot(capturedAt, game.commenceTime)) {
+        postKickoffMarketsRejected += 1;
+        continue;
+      }
       if (hasMarketNumber(book.awaySpread) && hasMarketNumber(book.homeSpread)) {
         const latest = await latestSpreadForSource(db, gameId, book.key);
         if (!spreadChanged(latest?.away_spread, book.awaySpread)) {
@@ -154,7 +163,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date(), requested
           await db.prepare(`
             INSERT INTO line_snapshots(game_id, captured_at, away_spread, source)
             VALUES (?, ?, ?, ?)
-          `).bind(gameId, book.lastUpdate ?? new Date().toISOString(), book.awaySpread, book.key).run();
+          `).bind(gameId, capturedAt, book.awaySpread, book.key).run();
           snapshotsInserted += 1;
         }
       }
@@ -167,11 +176,12 @@ export async function ingestWeeklySpreads(db, games, now = new Date(), requested
           await db.prepare(`
             INSERT INTO moneyline_snapshots(game_id, captured_at, away_moneyline, home_moneyline, source)
             VALUES (?, ?, ?, ?, ?)
-          `).bind(gameId, book.lastUpdate ?? new Date().toISOString(), book.awayMoneyline, book.homeMoneyline, book.key).run();
+          `).bind(gameId, capturedAt, book.awayMoneyline, book.homeMoneyline, book.key).run();
           moneylineSnapshotsInserted += 1;
         }
       }
     }
+    await reconcileGamePregameMarkets(db,gameId);
   }
 
   return {
@@ -183,6 +193,7 @@ export async function ingestWeeklySpreads(db, games, now = new Date(), requested
     snapshotsInserted,
     snapshotsUnchanged,
     moneylineSnapshotsInserted,
-    moneylineSnapshotsUnchanged
+    moneylineSnapshotsUnchanged,
+    postKickoffMarketsRejected
   };
 }

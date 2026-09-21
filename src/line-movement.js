@@ -1,6 +1,7 @@
 import { median } from "./consensus.js";
 import { noVigProbabilities } from "./moneyline.js";
 import { ensureMarketSchema } from "./market-schema.js";
+import { isPregameSnapshot } from "./pregame-markets.js";
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -42,7 +43,7 @@ function summarizeMoneylineMovement(game, snapshots = []) {
       homeMoneyline: finiteNumber(row.home_moneyline),
       capturedAt: row.captured_at ?? null
     }))
-    .filter((row) => Number.isFinite(row.id) && row.source && row.awayMoneyline !== null && row.homeMoneyline !== null)
+    .filter((row) => Number.isFinite(row.id) && row.source && row.awayMoneyline !== null && row.homeMoneyline !== null && isPregameSnapshot(row.capturedAt,game?.kickoff_at))
     .sort((a, b) => a.id - b.id);
 
   const firstBySource = new Map();
@@ -141,7 +142,7 @@ export function summarizeLineMovement(game, snapshots = [], moneylineSnapshots =
       awaySpread: finiteNumber(row.away_spread),
       capturedAt: row.captured_at ?? null
     }))
-    .filter((row) => Number.isFinite(row.id) && row.source && row.awaySpread !== null)
+    .filter((row) => Number.isFinite(row.id) && row.source && row.awaySpread !== null && isPregameSnapshot(row.capturedAt,game?.kickoff_at))
     .sort((a, b) => a.id - b.id);
 
   const firstBySource = new Map();
@@ -155,7 +156,8 @@ export function summarizeLineMovement(game, snapshots = [], moneylineSnapshots =
   const latestRows = [...latestBySource.values()];
   const firstAwaySpread = median(firstRows.map((row) => row.awaySpread));
   const currentAwaySpread = median(latestRows.map((row) => row.awaySpread));
-  const closingAwaySpread = finiteNumber(game.closing_away_spread);
+  const completed = String(game?.status ?? "").toUpperCase() === "COMPLETED";
+  const closingAwaySpread = completed ? currentAwaySpread : null;
   const delta = firstAwaySpread === null || currentAwaySpread === null
     ? null
     : rounded(currentAwaySpread - firstAwaySpread);
@@ -201,7 +203,7 @@ export function summarizeLineMovement(game, snapshots = [], moneylineSnapshots =
     lastCapturedAt: latestTimes.length ? new Date(Math.max(...latestTimes)).toISOString() : null,
     firstCapturedDefinition: "median_of_each_bookmakers_first_stored_line",
     currentDefinition: "median_of_each_bookmakers_latest_stored_line",
-    closingDefinition: "last_stored_consensus_before_result_sync",
+    closingDefinition: "latest_consensus_strictly_before_kickoff",
     moneyline,
     marketAlignment: marketAlignment(direction, moneyline.direction)
   };
@@ -225,16 +227,16 @@ export async function lineMovementForGame(db, gameId) {
   const result = await db.prepare(`
     SELECT id, source, away_spread, captured_at
     FROM line_snapshots
-    WHERE game_id = ?
+    WHERE game_id = ? AND julianday(captured_at) < julianday(?)
     ORDER BY id ASC
-  `).bind(id).all();
+  `).bind(id,game.kickoff_at).all();
 
   const moneylineResult = await db.prepare(`
     SELECT id, source, away_moneyline, home_moneyline, captured_at
     FROM moneyline_snapshots
-    WHERE game_id = ?
+    WHERE game_id = ? AND julianday(captured_at) < julianday(?)
     ORDER BY id ASC
-  `).bind(id).all();
+  `).bind(id,game.kickoff_at).all();
 
   return summarizeLineMovement(game, result.results ?? [], moneylineResult.results ?? []);
 }
@@ -260,6 +262,7 @@ export async function lineMovementsForWeek(db, season, week) {
     FROM line_snapshots ls
     JOIN games g ON g.id = ls.game_id
     WHERE g.season = ? AND g.week = ? AND g.season_type = 'REGULAR'
+      AND julianday(ls.captured_at) < julianday(g.kickoff_at)
     ORDER BY ls.id ASC
   `).bind(year, weekNumber).all();
 
@@ -268,6 +271,7 @@ export async function lineMovementsForWeek(db, season, week) {
     FROM moneyline_snapshots ml
     JOIN games g ON g.id = ml.game_id
     WHERE g.season = ? AND g.week = ? AND g.season_type = 'REGULAR'
+      AND julianday(ml.captured_at) < julianday(g.kickoff_at)
     ORDER BY ml.id ASC
   `).bind(year, weekNumber).all();
 

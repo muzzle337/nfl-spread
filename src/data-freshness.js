@@ -22,7 +22,7 @@ export async function dataFreshness(db,{season=null,week=null,now=new Date()}={}
   const s=target.season,w=target.week;
 
   const [marketRow,gameRow,contextRow,historyRow,cacheRow,resultRun,spreadRun]=await Promise.all([
-    s&&w?firstSafe(db,`SELECT MAX(ls.captured_at) AS updated_at FROM line_snapshots ls JOIN games g ON g.id=ls.game_id WHERE g.season=? AND g.week=? AND g.season_type='REGULAR'`,s,w):null,
+    s&&w?firstSafe(db,`SELECT MAX(ls.captured_at) AS updated_at FROM line_snapshots ls JOIN games g ON g.id=ls.game_id WHERE g.season=? AND g.week=? AND g.season_type='REGULAR' AND julianday(ls.captured_at)<julianday(g.kickoff_at)`,s,w):null,
     s&&w?firstSafe(db,`SELECT MAX(updated_at) AS updated_at, SUM(CASE WHEN status='COMPLETED' THEN 1 ELSE 0 END) AS completed, COUNT(*) AS total FROM games WHERE season=? AND week=? AND season_type='REGULAR'`,s,w):null,
     firstSafe(db,`SELECT created_at,nfldata_ok,nflverse_ok,weather_ok FROM context_sync_runs ORDER BY id DESC LIMIT 1`),
     firstSafe(db,`SELECT MAX(rebuilt_at) AS updated_at, COUNT(*) AS summaries FROM historical_coach_summaries`),

@@ -101,14 +101,16 @@ export async function consensusLinesForWeek(db, season, week) {
       SELECT source, away_spread, captured_at
       FROM line_snapshots ls
       WHERE ls.game_id = ?
+        AND julianday(ls.captured_at) < julianday(?)
         AND ls.id = (
           SELECT MAX(inner_ls.id)
           FROM line_snapshots inner_ls
           WHERE inner_ls.game_id = ls.game_id
             AND inner_ls.source = ls.source
+            AND julianday(inner_ls.captured_at) < julianday(?)
         )
       ORDER BY source ASC
-    `).bind(game.id).all();
+    `).bind(game.id,game.kickoff_at,game.kickoff_at).all();
 
     output.push(consensusForGame(game, latestResult.results ?? []));
   }

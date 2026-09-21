@@ -36,6 +36,8 @@ function projectedClassification(game) {
 
 export function signalSnapshotForGame(game) {
   const projectedTeam = game?.spread?.projectedTeam ?? null;
+  const projectedSide = projectedTeam === game?.awayTeam ? "away" : projectedTeam === game?.homeTeam ? "home" : null;
+  const projectedRecord = projectedSide ? game?.currentSeasonStats?.[projectedSide] ?? game?.spread?.record ?? null : null;
   return {
     gameId:String(game?.gameId ?? game?.id ?? ""),
     awayTeam:game?.awayTeam ?? null,
@@ -45,11 +47,19 @@ export function signalSnapshotForGame(game) {
     projectedClassification:projectedClassification(game),
     tier:game?.classification?.tier ?? null,
     coverRate:finite(game?.spread?.coverRate),
+    sampleSize:count(game?.spread?.sampleSize),
+    record:projectedRecord?{
+      wins:count(projectedRecord.wins),losses:count(projectedRecord.losses),pushes:count(projectedRecord.pushes)
+    }:null,
     grade:game?.spread?.grade ?? null,
     spread:{away:finite(game?.spread?.away),home:finite(game?.spread?.home)},
     market:{
       alignment:game?.movement?.marketAlignment ?? null,
-      movementTeam:movementTeam(game)
+      movementTeam:movementTeam(game),
+      awayMoneyline:finite(game?.market?.awayMoneyline),
+      homeMoneyline:finite(game?.market?.homeMoneyline),
+      awayWinPct:finite(game?.market?.awayWinPct),
+      homeWinPct:finite(game?.market?.homeWinPct)
     },
     historical:{
       supports:count(game?.history?.evidenceSummary?.supports),
@@ -133,7 +143,7 @@ function outrightOutcome(row, team) {
 
 function atsOutcome(row, snapshot, team) {
   if (row.status !== "COMPLETED" || finite(row.away_score) === null || finite(row.home_score) === null) return "PENDING";
-  const awaySpread = finite(row.away_spread) ?? finite(snapshot?.spread?.away);
+  const awaySpread = finite(snapshot?.spread?.away);
   if (awaySpread === null) return "PENDING";
   let settlement;
   try {
@@ -174,6 +184,7 @@ export function gradeSignalRows(rows) {
         homeTeam:row.home_team,
         awayScore:finite(row.away_score),
         homeScore:finite(row.home_score),
+        recommendationAwaySpread:finite(snapshot?.spread?.away),
         closingAwaySpread:finite(row.away_spread),
         capturedAt:row.captured_at,
         snapshot
@@ -233,4 +244,14 @@ export async function signalPerformance(db, season, selectedSignal = null) {
     oddsApiCalled:false,
     ...aggregateSignalPerformance(rows,selectedSignal)
   };
+}
+
+export async function signalSnapshotsForWeek(db, season, week) {
+  await ensureSignalPerformanceSchema(db);
+  const result=await db.prepare(`SELECT game_id,payload_json,captured_at FROM game_signal_snapshots
+    WHERE season=? AND week=? ORDER BY kickoff_at,game_id`).bind(Number(season),Number(week)).all();
+  return (result.results ?? []).map((row)=>{
+    try{return {gameId:row.game_id,capturedAt:row.captured_at,...JSON.parse(row.payload_json)}}
+    catch{return null}
+  }).filter(Boolean);
 }

@@ -75,23 +75,27 @@ export function consensusMoneylineForGame(game, latestBooks) {
   };
 }
 
-export async function latestMoneylineForGame(db, gameId) {
+export async function latestMoneylineForGame(db, gameId, kickoffAt = null) {
+  const game = kickoffAt ? null : await db.prepare(`SELECT kickoff_at FROM games WHERE id=? LIMIT 1`).bind(gameId).first();
+  const kickoff = kickoffAt ?? game?.kickoff_at;
   const result = await db.prepare(`
     SELECT source, away_moneyline, home_moneyline, captured_at
     FROM moneyline_snapshots ml
     WHERE ml.game_id = ?
+      AND julianday(ml.captured_at) < julianday(?)
       AND ml.id = (
         SELECT MAX(inner_ml.id)
         FROM moneyline_snapshots inner_ml
         WHERE inner_ml.game_id = ml.game_id
           AND inner_ml.source = ml.source
+          AND julianday(inner_ml.captured_at) < julianday(?)
       )
     ORDER BY source ASC
-  `).bind(gameId).all();
+  `).bind(gameId,kickoff,kickoff).all();
   return result.results ?? [];
 }
 
 export async function moneylineForGame(db, game) {
-  const latest = await latestMoneylineForGame(db, game.id);
+  const latest = await latestMoneylineForGame(db, game.id, game.kickoffAt ?? game.kickoff_at);
   return consensusMoneylineForGame(game, latest);
 }

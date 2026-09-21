@@ -2,9 +2,9 @@ import { projectionsForWeek } from "./projection.js";
 import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
-import { capturePregameSignalSnapshots } from "./signal-performance.js";
+import { capturePregameSignalSnapshots, signalSnapshotsForWeek } from "./signal-performance.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 5;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 6;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -134,10 +134,12 @@ async function buildWeeklyOutlookBase(db,season,week){
   return (dash.games||[]).map(g=>{
     const c=cBy.get(g.id)||null,h=hBy.get(g.id)||null,m=mBy.get(g.id)||null;
     const label=outlookLabel(g,h,null);
+    const projectedSide=g.projectedTeam===g.awayTeam?'away':g.projectedTeam===g.homeTeam?'home':null;
+    const projectedRecord=projectedSide?g.currentSeasonStats?.[projectedSide]??null:null;
     return {
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
       classification:g.classification||null,
-      spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
+      spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,record:projectedRecord,status:g.projectionStatus},
       market:{awayMoneyline:g.moneyline?.consensusAwayMoneyline??null,homeMoneyline:g.moneyline?.consensusHomeMoneyline??null,awayWinPct:g.moneyline?.awayWinProbability??null,homeWinPct:g.moneyline?.homeWinProbability??null,bookmakers:g.moneyline?.moneylineBookmakerCount??0},
       movement:m?{...m,text:movementText(m)}:null,
       history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0},situational:h.situational||[],situationalSummary:h.situationalSummary||{supports:0,conflicts:0,neutral:0}}:null,
@@ -184,11 +186,12 @@ export async function weeklyOutlookCacheStatus(db,season,week){
 export async function weeklyGameOutlooks(db,season,week){
   const base=await cachedWeeklyOutlookBase(db,season,week);
   await capturePregameSignalSnapshots(db,season,week,base.games,new Date());
-  const [picks,results]=await Promise.all([listWeeklyPicks(db,season,week),resultsForWeek(db,season,week)]);
+  const [picks,results,snapshots]=await Promise.all([listWeeklyPicks(db,season,week),resultsForWeek(db,season,week),signalSnapshotsForWeek(db,season,week)]);
   const pBy=new Map((picks||[]).map(p=>[p.gameId,p]));
+  const sBy=new Map((snapshots||[]).map(s=>[String(s.gameId),s]));
   const games=(base.games||[]).map(g=>{
     const p=pBy.get(g.gameId)||null,stored=results.get(String(g.gameId));
-    return {...g,pick:p?.team||null,pickResult:pickResult(stored,p?.team||null),final:stored&&stored.status==='COMPLETED'?{awayScore:Number(stored.away_score),homeScore:Number(stored.home_score)}:null};
+    return {...g,originalThesis:sBy.get(String(g.gameId))||null,pick:p?.team||null,pickResult:pickResult(stored,p?.team||null),final:stored&&stored.status==='COMPLETED'?{awayScore:Number(stored.away_score),homeScore:Number(stored.home_score)}:null};
   });
   Object.defineProperty(games,'cache',{value:base.cache,enumerable:false});
   return games;

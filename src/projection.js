@@ -197,14 +197,16 @@ async function latestBookLinesForGame(db, gameId) {
     SELECT source, away_spread, captured_at
     FROM line_snapshots ls
     WHERE ls.game_id = ?
+      AND julianday(ls.captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
       AND ls.id = (
         SELECT MAX(inner_ls.id)
         FROM line_snapshots inner_ls
         WHERE inner_ls.game_id = ls.game_id
           AND inner_ls.source = ls.source
+          AND julianday(inner_ls.captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
       )
     ORDER BY source ASC
-  `).bind(gameId).all();
+  `).bind(gameId,gameId,gameId).all();
   return result.results ?? [];
 }
 
@@ -212,7 +214,7 @@ async function currentSeasonSettledGamesThroughWeek(db, season, week) {
   const result = await db.prepare(`
     SELECT
       id, season, week, season_type, away_team, home_team, kickoff_at, status,
-      closing_away_spread, current_away_spread, away_score, home_score
+      closing_away_spread, opening_away_spread, away_score, home_score
     FROM games
     WHERE season = ?
       AND season_type = 'REGULAR'
@@ -229,7 +231,7 @@ async function currentSeasonSettledGamesThroughWeek(db, season, week) {
   for (const game of result.results ?? []) {
     const latestBooks = await latestBookLinesForGame(db, game.id);
     const consensus = latestBooks.length ? consensusForGame(game, latestBooks) : null;
-    const fallbackAwaySpread = finiteNumber(game.closing_away_spread) ?? finiteNumber(game.current_away_spread);
+    const fallbackAwaySpread = finiteNumber(game.closing_away_spread) ?? finiteNumber(game.opening_away_spread);
     const awaySpread = consensus?.medianAwaySpread ?? fallbackAwaySpread;
 
     if (awaySpread === null) {

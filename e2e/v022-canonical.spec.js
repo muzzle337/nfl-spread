@@ -101,6 +101,11 @@ function outlookGame(g){
       situationalSummary:{supports:1,conflicts:1,neutral:0}
     },
     context:{observations:[{kind:'supporting',label:'Rest edge',detail:'3 additional rest days',side:away?'AWAY':'HOME'}]},
+    originalThesis:g.final?{
+      gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,projectedTeam:g.projectedTeam,
+      projectedClassification:g.projectedClassification,tier:g.classification.tier,coverRate:g.projectedCoverRate,
+      sampleSize:g.sampleSize,grade:g.grade,record:{wins:1,losses:0,pushes:0},spread:{away:g.medianAwaySpread,home:g.medianHomeSpread}
+    }:null,
     pick:g.final?g.awayTeam:null,pickResult:g.final?'CORRECT':null,final:g.final
   };
 }
@@ -109,7 +114,8 @@ function pool(week){
   const games=dashboard(week).games.map(outlookGame);
   const cached=games.find(game=>game.gameId==='g2');
   if(cached)cached.spread.sampleSize=0;
-  return {ok:true,season:2026,week,summary:{correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)},games,performance:signalPerformance()};
+  const weekSummary={week,correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)};
+  return {ok:true,season:2026,week,summary:{...weekSummary,weeks:[weekSummary]},weekSummary,games,performance:signalPerformance()};
 }
 
 function signalPerformance(selected=null){
@@ -192,7 +198,7 @@ test('Dashboard tracks frozen pregame signal results and opens every contributor
   await expect(tier).toContainText('1 pending');
   await tier.click();
   await expect(page.getByText('Tier edge · Season signal tracking')).toBeVisible();
-  await expect(page.getByText('WEEKLY RESULTS')).toBeVisible();
+  await expect(page.getByText('Weekly Results',{exact:true})).toBeVisible();
   await expect(page.getByText('ALL TRACKED GAMES · 2')).toBeVisible();
   await expect(page.locator('[data-performance-game]')).toHaveCount(2);
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);
@@ -260,7 +266,7 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
 test('Game Detail explains market, thesis, Brain, history and context',async({page})=>{
   await page.getByRole('button',{name:/Games/}).click();
   await page.locator('.game-card').filter({hasText:'BUF'}).filter({hasText:'HOU'}).click();
-  await expect(page.getByText('CURRENT MARKET')).toBeVisible();
+  await expect(page.getByText('CURRENT PREGAME MARKET')).toBeVisible();
   await expect(page.getByText('MARKET MOVEMENT')).toBeVisible();
   await expect(page.getByText('Aligned',{exact:true})).toBeVisible();
   await expect(page.getByText('Spread and moneyline both strengthened toward BUF')).toBeVisible();
@@ -287,5 +293,7 @@ test('Tools makes free schedule and selected-week paid actions explicit',async({
   await expect(page.getByText('FREE · stores Weeks 1–18 without using Odds API credits')).toBeVisible();
   await expect(page.getByText('Load Week 1 Lines')).toBeVisible();
   await expect(page.getByText('PAID · one targeted spreads + moneylines request')).toBeVisible();
+  await expect(page.getByText('Repair Pregame Markets')).toBeVisible();
+  await expect(page.getByText('FREE · rebuilds opening and closing lines from stored pre-kickoff snapshots')).toBeVisible();
   await page.screenshot({path:'test-results/v022-tools.png',fullPage:true});
 });

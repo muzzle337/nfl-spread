@@ -41,14 +41,16 @@ async function latestConsensusAwaySpread(db, gameId) {
     SELECT away_spread
     FROM line_snapshots ls
     WHERE ls.game_id = ?
+      AND julianday(ls.captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
       AND ls.id = (
         SELECT MAX(inner_ls.id)
         FROM line_snapshots inner_ls
         WHERE inner_ls.game_id = ls.game_id
           AND inner_ls.source = ls.source
+          AND julianday(inner_ls.captured_at) < (SELECT julianday(kickoff_at) FROM games WHERE id = ?)
       )
     ORDER BY source ASC
-  `).bind(gameId).all();
+  `).bind(gameId,gameId,gameId).all();
 
   return median((result.results ?? []).map((row) => row.away_spread));
 }
