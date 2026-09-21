@@ -117,7 +117,7 @@ test("completed games expose the last stored moneyline as closing and flag diver
   assert.equal(completed.marketAlignment, "DIVERGENT");
 });
 
-test("closing line is kept separate from current movement and can remain pending", () => {
+test("completed closing line is derived from the final valid pregame consensus", () => {
   const pending = summarizeLineMovement(game, []);
   assert.equal(pending.firstCapturedAwaySpread, null);
   assert.equal(pending.currentAwaySpread, null);
@@ -129,7 +129,25 @@ test("closing line is kept separate from current movement and can remain pending
     { id: 2, source: "a", away_spread: 4, captured_at: "2026-09-13T20:00:00Z" }
   ]);
   assert.equal(completed.currentAwaySpread, 4);
-  assert.equal(completed.closingAwaySpread, 4.5);
+  assert.equal(completed.closingAwaySpread, 4);
+});
+
+test("post-kickoff spread and moneyline snapshots never enter movement summaries", () => {
+  const movement = summarizeLineMovement(
+    { ...game, status:"COMPLETED", closing_away_spread:4 },
+    [
+      { id:1,source:"a",away_spread:3.5,captured_at:"2026-09-13T19:00:00Z" },
+      { id:2,source:"a",away_spread:-17.5,captured_at:"2026-09-13T21:00:00Z" }
+    ],
+    [
+      { id:1,source:"a",away_moneyline:150,home_moneyline:-170,captured_at:"2026-09-13T19:00:00Z" },
+      { id:2,source:"a",away_moneyline:-900,home_moneyline:600,captured_at:"2026-09-13T21:00:00Z" }
+    ]
+  );
+  assert.equal(movement.currentAwaySpread,3.5);
+  assert.equal(movement.snapshotCount,1);
+  assert.equal(movement.moneyline.currentAwayMoneyline,150);
+  assert.equal(movement.moneyline.snapshotCount,1);
 });
 
 test("movement lookup reads only stored D1 game and snapshot data", async () => {
