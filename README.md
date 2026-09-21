@@ -56,6 +56,8 @@ Line movement is calculated entirely from D1 data we already store. Viewing it c
 
 Starting with v0.24.0, the app freezes the latest displayed signal state before kickoff and grades it after the game. The Dashboard keeps ATS signals separate from outright signals, shows weekly and season records, and lets each row open every contributing game. This scorecard is observational: it does not modify Focus grades, tier percentages, or weekly picks, and it reads only stored D1 data.
 
+Starting with v0.24.1, opening, current, recommendation, and closing markets are explicitly pregame-only. Provider rows timestamped at or after kickoff are rejected from new ingestion and excluded from consensus, movement, moneyline, Tier Pulse, and grading reads. The protected `POST /api/markets/reconcile?season=YYYY` operation repairs stored game columns from existing pre-kickoff snapshots without calling the Odds API or deleting raw audit rows. Frozen signals are graded against their exact recommendation spread; closing-line ATS results remain a separate postgame view.
+
 ## Automatic updates
 
 Spread refresh checks run hourly, but D1 is checked first and the paid Odds API is only called when the market data is due for a refresh.
