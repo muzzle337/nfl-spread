@@ -15,11 +15,11 @@ async function settledSeasonGames(db, season) {
   if (!Number.isInteger(year)) throw new Error("season is required");
   const result = await db.prepare(`
     SELECT id,week,away_team,home_team,kickoff_at,away_score,home_score,
-      COALESCE(closing_away_spread,current_away_spread,opening_away_spread) AS away_spread
+      COALESCE(closing_away_spread,opening_away_spread) AS away_spread
     FROM games
     WHERE season=? AND season_type='REGULAR' AND status='COMPLETED'
       AND away_score IS NOT NULL AND home_score IS NOT NULL
-      AND COALESCE(closing_away_spread,current_away_spread,opening_away_spread) IS NOT NULL
+      AND COALESCE(closing_away_spread,opening_away_spread) IS NOT NULL
     ORDER BY week,kickoff_at,id
   `).bind(year).all();
   return result.results ?? [];
