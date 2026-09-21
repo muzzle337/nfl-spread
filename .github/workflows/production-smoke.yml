@@ -32,16 +32,16 @@ jobs:
               data=json.loads(sys.argv[1])
           except Exception:
               raise SystemExit(1)
-          raise SystemExit(0 if data.get('version') == '0.24.0' else 1)
+          raise SystemExit(0 if data.get('version') == '0.24.1' else 1)
           PY
             then
-              echo "Production is serving v0.24.0"
+              echo "Production is serving v0.24.1"
               exit 0
             fi
             echo "Attempt $attempt: waiting for Cloudflare deployment..."
             sleep 20
           done
-          echo "Production never served v0.24.0"
+          echo "Production never served v0.24.1"
           exit 1
 
       - name: Verify real Week 1 finals, postgame stats, and live tiers
@@ -95,7 +95,7 @@ jobs:
           import json,os
           data=json.loads(os.environ['HEALTH'])
           required={
-              'version':'0.24.0',
+              'version':'0.24.1',
               'canonicalShell':True,
               'canonicalBackendRouter':True,
               'survivorActive':False,
@@ -126,6 +126,9 @@ jobs:
               'signalPerformanceAffectsFocus':False,
               'signalPerformanceAffectsPicks':False,
               'signalPerformanceUsesStoredDataOnly':True,
+              'pregameMarketIntegrity':True,
+              'postKickoffMarketsRejected':True,
+              'signalGradingUsesRecommendationLine':True,
               'rawPlayByPlayReadDuringUi':False,
               'canonicalTeamAliases':True,
               'finalScoreProminent':True,
@@ -192,8 +195,9 @@ jobs:
               raise SystemExit(f'Unexpected signal definitions: {actual}')
           if performance.get('snapshotCount',0) < 1:
               raise SystemExit('No frozen pregame signal snapshots were captured')
-          if not any(row.get('pending',0) > 0 for row in signals):
-              raise SystemExit('Expected at least one pending Week 2 signal')
+          total_tracked=sum((row.get('decisions',0) or 0)+(row.get('pending',0) or 0) for row in signals)
+          if total_tracked < 1:
+              raise SystemExit('No frozen Week 2 signal observations were found')
           detail=json.loads(os.environ['DETAIL'])
           contributors=detail.get('contributors') or []
           if not contributors:
