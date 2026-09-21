@@ -198,7 +198,7 @@ test('Dashboard tracks frozen pregame signal results and opens every contributor
   await expect(tier).toContainText('1 pending');
   await tier.click();
   await expect(page.getByText('Tier edge · Season signal tracking')).toBeVisible();
-  await expect(page.getByText('WEEKLY RESULTS',{exact:true})).toBeVisible();
+  await expect(page.getByText('Weekly Results',{exact:true})).toBeVisible();
   await expect(page.getByText('ALL TRACKED GAMES · 2')).toBeVisible();
   await expect(page.locator('[data-performance-game]')).toHaveCount(2);
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);
