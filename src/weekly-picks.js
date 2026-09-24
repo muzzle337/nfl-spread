@@ -3,8 +3,9 @@ import { contextForWeek } from "./context.js";
 import { historicalIndicatorsForWeek } from "./history-matchups.js";
 import { lineMovementsForWeek } from "./line-movement.js";
 import { capturePregameSignalSnapshots, signalSnapshotsForWeek } from "./signal-performance.js";
+import { projectConsensusGame } from "./projection.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 6;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 7;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -77,6 +78,56 @@ function movementText(m){
   return toward?`Line moved ${mag} toward ${toward}`:`Line moved ${mag}`;
 }
 
+function opposite(spread){return spread===null?null:spread===0?0:-spread}
+
+function publicSignal(projected, market = null) {
+  if (!projected?.classification) return null;
+  const side = projected.projectedTeam === projected.awayTeam ? "away" : projected.projectedTeam === projected.homeTeam ? "home" : null;
+  return {
+    spread:{away:finite(projected.medianAwaySpread),home:finite(projected.medianHomeSpread)},
+    classification:projected.classification,
+    projectedTeam:projected.projectedTeam ?? null,
+    projectedClassification:side ? projected.classification[side] ?? null : null,
+    coverRate:finite(projected.projectedCoverRate),
+    sampleSize:Number(projected.sampleSize ?? 0),
+    grade:projected.grade ?? null,
+    status:projected.projectionStatus ?? null,
+    record:side ? projected.currentSeasonStats?.[side] ?? null : null,
+    sideRecords:projected.currentSeasonStats ?? null,
+    market
+  };
+}
+
+export function openingSignalForGame(game, movement, openingWeekStats, thresholds) {
+  const away = finite(movement?.firstCapturedAwaySpread);
+  if (away === null) return null;
+  const projected = projectConsensusGame({
+    ...game,
+    medianAwaySpread:away,
+    medianHomeSpread:opposite(away)
+  },openingWeekStats,thresholds);
+  return publicSignal(projected,{
+    awayMoneyline:finite(movement?.moneyline?.openingAwayMoneyline),
+    homeMoneyline:finite(movement?.moneyline?.openingHomeMoneyline),
+    awayWinPct:finite(movement?.moneyline?.openingAwayNoVigProbability),
+    homeWinPct:finite(movement?.moneyline?.openingHomeNoVigProbability)
+  });
+}
+
+function signalChange(opening, current) {
+  if (!opening || !current) return null;
+  return {
+    spreadChanged:finite(opening.spread?.away)!==finite(current.spread?.away),
+    tierChanged:opening.classification?.tier!==current.classification?.tier,
+    categoryChanged:opening.classification?.away!==current.classification?.away||opening.classification?.home!==current.classification?.home,
+    projectedTeamChanged:(opening.projectedTeam??null)!==(current.projectedTeam??null),
+    openingProjectedTeam:opening.projectedTeam??null,
+    currentProjectedTeam:current.projectedTeam??null,
+    openingTier:opening.classification?.tier??null,
+    currentTier:current.classification?.tier??null
+  };
+}
+
 export function outlookLabel(game,history,context){
   const awayP=finite(game.moneyline?.awayWinProbability),homeP=finite(game.moneyline?.homeWinProbability);
   const outright=awayP===null&&homeP===null?null:(awayP>=homeP?game.awayTeam:game.homeTeam);
@@ -136,6 +187,13 @@ async function buildWeeklyOutlookBase(db,season,week){
     const label=outlookLabel(g,h,null);
     const projectedSide=g.projectedTeam===g.awayTeam?'away':g.projectedTeam===g.homeTeam?'home':null;
     const projectedRecord=projectedSide?g.currentSeasonStats?.[projectedSide]??null:null;
+    const currentSignal=publicSignal(g,{
+      awayMoneyline:g.moneyline?.consensusAwayMoneyline??null,
+      homeMoneyline:g.moneyline?.consensusHomeMoneyline??null,
+      awayWinPct:g.moneyline?.awayWinProbability??null,
+      homeWinPct:g.moneyline?.homeWinProbability??null
+    });
+    const openingSignal=openingSignalForGame(g,m,dash.openingWeekStats,dash.thresholds);
     return {
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
       classification:g.classification||null,
@@ -144,7 +202,10 @@ async function buildWeeklyOutlookBase(db,season,week){
       movement:m?{...m,text:movementText(m)}:null,
       history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0},situational:h.situational||[],situationalSummary:h.situationalSummary||{supports:0,conflicts:0,neutral:0}}:null,
       context:c?{venue:[c.stadium,c.roof,c.surface].filter(Boolean).join(' · '),weather:c.weather,rest:{away:c.awayRest,home:c.homeRest},observations:c.observations||[],quality:c.quality}:null,
-      outlook:label
+      outlook:label,
+      openingSignal,
+      currentSignal,
+      signalChange:signalChange(openingSignal,currentSignal)
     };
   });
 }

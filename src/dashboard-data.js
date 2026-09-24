@@ -3,6 +3,7 @@ import { weekResultsStatus } from "./result-sync.js";
 import { settleAgainstSpread } from "./engine.js";
 import { seasonTierPulse } from "./tier-contributors.js";
 import { dedupeCanonicalMatchups } from "./team-codes.js";
+import { buildTrendWatch } from "./trend-watch.js";
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -141,6 +142,7 @@ export async function dashboardSnapshot(db, now = new Date(), selected = null) {
   return {
     ...projection,
     seasonPulse,
+    trendWatch:buildTrendWatch(seasonPulse,games),
     games,
     results
   };

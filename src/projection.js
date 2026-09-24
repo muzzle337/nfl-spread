@@ -1,6 +1,7 @@
 import { consensusForGame, consensusLinesForWeek } from "./consensus.js";
 import { classifyGame, settleAgainstSpread } from "./engine.js";
 import { moneylineForGame } from "./moneyline.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 const DEFAULT_THRESHOLDS = Object.freeze({
   focusMin: 55,
@@ -228,7 +229,7 @@ async function currentSeasonSettledGamesThroughWeek(db, season, week) {
   const settled = [];
   let skippedWithoutLine = 0;
 
-  for (const game of result.results ?? []) {
+  for (const game of dedupeCanonicalMatchups(result.results ?? [])) {
     const latestBooks = await latestBookLinesForGame(db, game.id);
     const consensus = latestBooks.length ? consensusForGame(game, latestBooks) : null;
     const fallbackAwaySpread = finiteNumber(game.closing_away_spread) ?? finiteNumber(game.opening_away_spread);
