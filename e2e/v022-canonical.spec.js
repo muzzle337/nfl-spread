@@ -221,7 +221,7 @@ test('Week selector loads the known Week 2 schedule before Week 1 is complete',a
   await page.locator('[data-week-select]').selectOption('2');
   await expect(page.locator('[data-week-select]')).toHaveValue('2');
   await expect(page.getByText('DEN @ KC')).toBeVisible();
-  await expect(page.getByText('Home Favorite · 0.5–3')).toBeVisible();
+  await expect(page.locator('.focus-row').filter({hasText:'DEN @ KC'})).toContainText('Home Favorite · 0.5–3');
   await expect(page.locator('[data-bucket="AwayFav|<=3"]')).toContainText('3-2 season');
   await page.getByRole('button',{name:/Games/}).click();
   await expect(page.locator('.game-card')).toHaveCount(1);
@@ -283,8 +283,8 @@ test('Game Detail explains market, original/current signals, category evidence, 
   await expect(page.getByText('This movement supports the BUF tier signal.')).toBeVisible();
   await expect(page.getByText('ML Open BUF -110 / HOU -105 → Current BUF -125 / HOU +110')).toBeVisible();
   await expect(page.getByText('ORIGINAL AND CURRENT SIGNALS')).toBeVisible();
-  await expect(page.getByText('ORIGINAL SIGNAL',{exact:true})).toBeVisible();
-  await expect(page.getByText('CURRENT SIGNAL',{exact:true})).toBeVisible();
+  await expect(page.getByText('Original signal',{exact:true})).toBeVisible();
+  await expect(page.getByText('Current signal',{exact:true})).toBeVisible();
   await expect(page.getByText('CURRENT CATEGORY & TIER · TAP FOR PATTERN')).toBeVisible();
   await expect(page.getByText('Weekly momentum, contributors and W1 games ›').first()).toBeVisible();
   await expect(page.getByText('EXPERT READ')).toBeVisible();
