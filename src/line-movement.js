@@ -2,6 +2,7 @@ import { median } from "./consensus.js";
 import { noVigProbabilities } from "./moneyline.js";
 import { ensureMarketSchema } from "./market-schema.js";
 import { isPregameSnapshot } from "./pregame-markets.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -254,7 +255,7 @@ export async function lineMovementsForWeek(db, season, week) {
     WHERE season = ? AND week = ? AND season_type = 'REGULAR'
     ORDER BY kickoff_at ASC, id ASC
   `).bind(year, weekNumber).all();
-  const games = gamesResult.results ?? [];
+  const games = dedupeCanonicalMatchups(gamesResult.results ?? []);
   if (!games.length) return [];
 
   const snapshotsResult = await db.prepare(`

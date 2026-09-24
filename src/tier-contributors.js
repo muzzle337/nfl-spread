@@ -1,5 +1,6 @@
 import { classifyGame, settleAgainstSpread } from "./engine.js";
 import { buildCurrentSeasonStats } from "./projection.js";
+import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 const ALLOWED_CLASSES = new Set(["AwayDog", "AwayFav", "HomeDog", "HomeFav"]);
 const ALLOWED_TIERS = new Set(["<=3", "<=7", ">7"]);
@@ -22,7 +23,7 @@ async function settledSeasonGames(db, season) {
       AND COALESCE(closing_away_spread,opening_away_spread) IS NOT NULL
     ORDER BY week,kickoff_at,id
   `).bind(year).all();
-  return result.results ?? [];
+  return dedupeCanonicalMatchups(result.results ?? []);
 }
 
 function normalizedSettled(row) {

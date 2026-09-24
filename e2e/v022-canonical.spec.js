@@ -60,6 +60,7 @@ function dashboard(week){
   return {
     ok:true,season:2026,week,results:{completedGames:week===1?1:0,awaitingCompletion:games.length},
     currentSeasonGamesConsidered:5,seasonPulse,
+    trendWatch:[{key:'HomeFav|<=3',classification:'HomeFav',oppositeClassification:'AwayDog',tier:'<=3',wins:2,losses:1,pushes:0,decisions:3,coverRate:66.7,oppositeCoverRate:33.3,momentum:{status:'NEW',previous:null,current:66.7,previousWeek:null,currentWeek:1,delta:null},currentWeekMatchCount:games.filter(g=>g.classification?.home==='HomeFav'&&g.classification?.tier==='<=3').length,currentWeekMatches:[]}],
     liveWeekStats:{gamesConsidered:5,buckets:{
       'AwayDog|<=3':{wins:1,losses:2,pushes:0,coverRate:33.3},
       'AwayFav|<=3':{wins:3,losses:2,pushes:0,coverRate:60},
@@ -74,6 +75,12 @@ function dashboard(week){
 function outlookGame(g){
   const away=g.projectedTeam===g.awayTeam;
   const currentAway=g.moneyline?.consensusAwayMoneyline??180,currentHome=g.moneyline?.consensusHomeMoneyline??-210;
+  const openingAway=g.medianAwaySpread+(away?1:-1),openingHome=openingAway===0?0:-openingAway;
+  const openingTier=Math.abs(openingAway)<=3?'<=3':Math.abs(openingAway)<=7?'<=7':'>7';
+  const openingClassification={away:openingAway<0?'AwayFav':'AwayDog',home:openingAway<0?'HomeDog':'HomeFav',tier:openingTier};
+  const side=away?'away':'home',currentRecord=g.currentSeasonStats?.[side]||null;
+  const openingSignal={spread:{away:openingAway,home:openingHome},classification:openingClassification,projectedTeam:g.projectedTeam,projectedClassification:openingClassification[side],coverRate:g.projectedCoverRate,sampleSize:g.sampleSize,grade:g.grade,status:g.projectionStatus,record:currentRecord,sideRecords:g.currentSeasonStats,market:{awayMoneyline:away?-110:100,homeMoneyline:away?-105:-115,awayWinPct:away?48.8:47,homeWinPct:away?51.2:53}};
+  const currentSignal={spread:{away:g.medianAwaySpread,home:g.medianHomeSpread},classification:g.classification,projectedTeam:g.projectedTeam,projectedClassification:g.classification?.[side],coverRate:g.projectedCoverRate,sampleSize:g.sampleSize,grade:g.grade,status:g.projectionStatus,record:currentRecord,sideRecords:g.currentSeasonStats,market:{awayMoneyline:currentAway,homeMoneyline:currentHome}};
   return {
     gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,kickoffAt:g.kickoffAt,
     spread:{away:g.medianAwaySpread,home:g.medianHomeSpread,projectedTeam:g.projectedTeam,coverRate:g.projectedCoverRate,grade:g.grade,sampleSize:g.sampleSize,status:g.projectionStatus},
@@ -101,6 +108,7 @@ function outlookGame(g){
       situationalSummary:{supports:1,conflicts:1,neutral:0}
     },
     context:{observations:[{kind:'supporting',label:'Rest edge',detail:'3 additional rest days',side:away?'AWAY':'HOME'}]},
+    openingSignal,currentSignal,signalChange:{spreadChanged:openingAway!==g.medianAwaySpread,tierChanged:openingTier!==g.classification.tier,categoryChanged:openingClassification.away!==g.classification.away,projectedTeamChanged:false,openingProjectedTeam:g.projectedTeam,currentProjectedTeam:g.projectedTeam,openingTier,currentTier:g.classification.tier},
     originalThesis:g.final?{
       gameId:g.id,awayTeam:g.awayTeam,homeTeam:g.homeTeam,projectedTeam:g.projectedTeam,
       projectedClassification:g.projectedClassification,tier:g.classification.tier,coverRate:g.projectedCoverRate,
@@ -167,6 +175,9 @@ test.beforeEach(async({page})=>{
 });
 
 test('Dashboard connects Tier Pulse to qualified upcoming games and contributors',async({page})=>{
+  await expect(page.getByText('TREND WATCH')).toBeVisible();
+  await expect(page.locator('.trend-card')).toHaveCount(1);
+  await expect(page.locator('.trend-card')).toContainText('New this season · W1 66.7%');
   await expect(page.getByText('QUALIFIED GAMES THIS WEEK')).toBeVisible();
   await expect(page.getByText('Upcoming games in categories currently hitting 55%+')).toBeVisible();
   const focusCard=page.locator('.focus-row').filter({hasText:'BUF @ HOU'});
@@ -263,15 +274,19 @@ test('Picks shares the selected week and remains horizontally stable',async({pag
   await page.screenshot({path:'test-results/v022-picks.png',fullPage:true});
 });
 
-test('Game Detail explains market, thesis, Brain, history and context',async({page})=>{
+test('Game Detail explains market, original/current signals, category evidence, Brain, history and context',async({page})=>{
   await page.getByRole('button',{name:/Games/}).click();
   await page.locator('.game-card').filter({hasText:'BUF'}).filter({hasText:'HOU'}).click();
   await expect(page.getByText('CURRENT PREGAME MARKET')).toBeVisible();
   await expect(page.getByText('MARKET MOVEMENT')).toBeVisible();
-  await expect(page.getByText('Aligned',{exact:true})).toBeVisible();
-  await expect(page.getByText('Spread and moneyline both strengthened toward BUF')).toBeVisible();
+  await expect(page.getByText('Both markets moved toward BUF',{exact:true})).toBeVisible();
+  await expect(page.getByText('This movement supports the BUF tier signal.')).toBeVisible();
   await expect(page.getByText('ML Open BUF -110 / HOU -105 → Current BUF -125 / HOU +110')).toBeVisible();
-  await expect(page.getByText('ORIGINAL THESIS')).toBeVisible();
+  await expect(page.getByText('ORIGINAL AND CURRENT SIGNALS')).toBeVisible();
+  await expect(page.getByText('ORIGINAL SIGNAL',{exact:true})).toBeVisible();
+  await expect(page.getByText('CURRENT SIGNAL',{exact:true})).toBeVisible();
+  await expect(page.getByText('CURRENT CATEGORY & TIER · TAP FOR PATTERN')).toBeVisible();
+  await expect(page.getByText('Weekly momentum, contributors and W1 games ›').first()).toBeVisible();
   await expect(page.getByText('EXPERT READ')).toBeVisible();
   await expect(page.getByText('Brain',{exact:true})).toBeVisible();
   await expect(page.getByText('HISTORICAL EVIDENCE')).toBeVisible();

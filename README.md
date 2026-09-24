@@ -14,6 +14,12 @@ A simple current-season NFL spread dashboard.
 
 The tool does **not** predict the final score. It finds current games that match patterns from completed games this season.
 
+## Tier Pulse and Trend Watch
+
+Tier Pulse is always season-to-date, regardless of which schedule week is open. Tap any category and tier to see its weekly momentum, every completed game contributing to the record, and the games in the selected week that currently belong to that bucket.
+
+Trend Watch keeps the Dashboard compact by showing only the stronger side of each complementary category pair for a tier. It includes the season record, visible sample, week-to-week direction, and the selected week's matching games. It is descriptive context, not a second prediction or confidence model.
+
 ## Grades
 
 - **A:** 70%+
@@ -51,6 +57,8 @@ The app also shows how many points the consensus moved, which team the market mo
 **Important:** First Captured is not guaranteed to be the sportsbook's true opening line. The tool did not begin watching every game at the exact moment each sportsbook opened its market, so the UI labels this honestly instead of calling it a true opener.
 
 Line movement is calculated entirely from D1 data we already store. Viewing it costs no Odds API credits.
+
+Starting with v0.25.0, the app evaluates the first captured pregame spread and the latest pregame spread independently. When movement crosses a tier or changes the qualified side, Game Detail shows the **Original signal** and **Current/Closing signal** equally and states the change directly. The Games card also flags the signal transition so a current tier is never mistaken for the original thesis.
 
 ## Signal performance
 

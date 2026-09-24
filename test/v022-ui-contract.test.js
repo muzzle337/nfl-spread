@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
-test('v0.24.1 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.24.1');
+test('v0.25.0 serves one canonical four-screen shell',async()=>{
+  assert.equal(APP_VERSION,'0.25.0');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -25,7 +25,7 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.equal(scripts.length,1);
   scripts.forEach(script=>assert.doesNotThrow(()=>new Function(script)));
 
-  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+performance\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
+  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+trendWatch\(\)\+performance\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
   assert.match(html,/function games\(\).*gamesSection\(\)/);
   assert.match(html,/function picks\(\)/);
   assert.match(html,/data-week-select/);
@@ -67,7 +67,13 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Market Movement/);
   assert.match(html,/Moneyline history unavailable/);
   assert.match(html,/probability pt/);
-  assert.match(html,/Spread and moneyline both strengthened/);
+  assert.match(html,/Both markets moved toward/);
+  assert.match(html,/Trend Watch/);
+  assert.match(html,/Original and /);
+  assert.match(html,/function compactSignalChange/);
+  assert.match(html,/Signal changed:/);
+  assert.match(html,/Current Category & Tier · Tap for pattern/);
+  assert.match(html,/Tier signal changed from/);
   assert.match(html,/FINAL SPREAD RESULT/);
   assert.match(html,/Spread Result/);
   assert.match(html,/<details><summary>Sportsbooks/);
@@ -135,7 +141,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.24.1');
+  assert.equal(body.version,'0.25.0');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -167,6 +173,11 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.signalGradingUsesRecommendationLine,true);
   assert.equal(body.rawPlayByPlayReadDuringUi,false);
   assert.equal(body.canonicalTeamAliases,true);
+  assert.equal(body.canonicalMovementWeek,true);
+  assert.equal(body.originalCurrentSignals,true);
+  assert.equal(body.tierCrossingExplanation,true);
+  assert.equal(body.dashboardTrendWatch,true);
+  assert.equal(body.categoryTierEvidenceLinks,true);
   assert.equal(body.seasonTierMomentum,true);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
@@ -181,7 +192,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.24\.1"/);
+  assert.match(script,/VERSION = "0\.25\.0"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });
