@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
-test('v0.25.2 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.25.2');
+test('v0.25.3 serves one canonical four-screen shell',async()=>{
+  assert.equal(APP_VERSION,'0.25.3');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -90,6 +90,11 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Entering Week /);
   assert.match(html,/So Far/);
   assert.match(html,/pts since Week/);
+  assert.match(html,/Entering W/);
+  assert.match(html,/Live Season/);
+  assert.match(html,/Cumulative season record before this week versus now/);
+  assert.match(html,/data-pulse-mode/);
+  assert.match(html,/remaining W/);
 });
 
 test('canonical shell uses approved APIs without recurring background refresh',()=>{
@@ -151,7 +156,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.25.2');
+  assert.equal(body.version,'0.25.3');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -188,6 +193,8 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.originalCurrentSignals,true);
   assert.equal(body.tierCrossingExplanation,true);
   assert.equal(body.dashboardTrendWatch,true);
+  assert.equal(body.weekBaselineVsLivePulse,true);
+  assert.equal(body.weekBaselineUsesStoredResultsOnly,true);
   assert.equal(body.categoryTierEvidenceLinks,true);
   assert.equal(body.seasonTierMomentum,true);
 
@@ -203,7 +210,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.25\.2"/);
+  assert.match(script,/VERSION = "0\.25\.3"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });

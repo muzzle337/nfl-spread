@@ -559,6 +559,8 @@ async function healthRoute(env){
     originalCurrentSignals:true,
     tierCrossingExplanation:true,
     dashboardTrendWatch:true,
+    weekBaselineVsLivePulse:true,
+    weekBaselineUsesStoredResultsOnly:true,
     categoryTierEvidenceLinks:true,
     opportunityEdgeFocus:true,
     focusAffectsPredictions:false,
