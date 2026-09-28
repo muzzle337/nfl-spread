@@ -86,6 +86,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.doesNotMatch(html,/s=p\.spread\|\|spreadOf\(g\)/);
   assert.match(html,/function openBucket\(key\)\{S\.selected=null;/);
   assert.match(html,/function openSignal\(key\)\{S\.selected=null;/);
+  assert.match(html,/Previous Week Close/);
+  assert.match(html,/Entering Week /);
+  assert.match(html,/So Far/);
+  assert.match(html,/pts since Week/);
 });
 
 test('canonical shell uses approved APIs without recurring background refresh',()=>{
