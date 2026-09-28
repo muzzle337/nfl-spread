@@ -92,6 +92,27 @@ test("ATS and outright signals are graded separately from the frozen snapshot",(
   assert.equal(byId.TIER_EDGE.weeks.length,2);
 });
 
+test("market opposition is tracked separately for ATS and outright outcomes",()=>{
+  const opposed=payload({
+    gameId:"den-lar",awayTeam:"LAR",homeTeam:"DEN",projectedTeam:"LAR",projectedClassification:"AwayFav",
+    spread:{away:-1.5,home:1.5},market:{alignment:"ALIGNED",movementTeam:"DEN"},outrightTeam:"LAR"
+  });
+  const graded=gradeSignalRows([
+    stored("den-lar",3,opposed,{away_team:"LAR",home_team:"DEN",away_score:26,home_score:30,away_spread:-1.5})
+  ]);
+  const result=aggregateSignalPerformance(graded);
+  const byId=Object.fromEntries(result.signals.map((row)=>[row.id,row]));
+  assert.deepEqual(
+    {wins:byId.MARKET_OPPOSES_TIER_ATS.wins,losses:byId.MARKET_OPPOSES_TIER_ATS.losses,metric:byId.MARKET_OPPOSES_TIER_ATS.metric},
+    {wins:1,losses:0,metric:"ATS"}
+  );
+  assert.deepEqual(
+    {wins:byId.MARKET_OPPOSES_TIER_OUTRIGHT.wins,losses:byId.MARKET_OPPOSES_TIER_OUTRIGHT.losses,metric:byId.MARKET_OPPOSES_TIER_OUTRIGHT.metric},
+    {wins:1,losses:0,metric:"OUTRIGHT"}
+  );
+  assert.equal(graded.filter((row)=>row.signal.startsWith("MARKET_OPPOSES_TIER")).every((row)=>row.team==="DEN"),true);
+});
+
 test("unsupported drilldown signals are rejected",()=>{
   assert.throws(()=>aggregateSignalPerformance([],"MADE_UP"),/Unsupported signal/);
 });

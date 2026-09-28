@@ -544,6 +544,7 @@ async function healthRoute(env){
     situationalTrendsAffectFocus:false,
     situationalTrendsCached:true,
     signalPerformanceTracking:true,
+    marketOpposesTierTracking:['ATS','OUTRIGHT'],
     signalPerformanceStartVersion:'0.24.0',
     pregameSignalSnapshots:true,
     signalPerformanceAffectsFocus:false,
