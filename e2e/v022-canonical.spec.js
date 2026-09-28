@@ -182,7 +182,7 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await page.getByRole('button',{name:'Entering W1'}).click();
   await expect(page.getByRole('button',{name:'Entering W1'})).toHaveClass(/active/);
   await expect(awayFavoriteSmall).toContainText('No prior results');
-  await expect(awayFavoriteSmall).toContainText('No prior-week result');
+  await expect(awayFavoriteSmall).toContainText('Current 60%');
   await page.getByRole('button',{name:/Live Season/}).click();
   await expect(page.getByText('TREND WATCH')).toBeVisible();
   await expect(page.locator('.trend-card')).toHaveCount(1);
