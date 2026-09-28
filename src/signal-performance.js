@@ -3,6 +3,8 @@ import { settleAgainstSpread } from "./engine.js";
 export const SIGNAL_DEFINITIONS = Object.freeze([
   { id:"TIER_EDGE", label:"Tier edge", metric:"ATS" },
   { id:"MARKET_ALIGNED", label:"Tier + market aligned", metric:"ATS" },
+  { id:"MARKET_OPPOSES_TIER_ATS", label:"Market opposes tier", metric:"ATS" },
+  { id:"MARKET_OPPOSES_TIER_OUTRIGHT", label:"Market opposes tier", metric:"OUTRIGHT" },
   { id:"HISTORICAL_SUPPORT", label:"Historical support", metric:"ATS" },
   { id:"SITUATIONAL_SUPPORT", label:"Situational support", metric:"OUTRIGHT" },
   { id:"OUTRIGHT_OUTLOOK", label:"Outright outlook", metric:"OUTRIGHT" }
@@ -123,6 +125,10 @@ function signalInstances(snapshot) {
   if (qualified) rows.push({ signal:"TIER_EDGE", team:projectedTeam, metric:"ATS" });
   if (qualified && snapshot?.market?.alignment === "ALIGNED" && snapshot.market.movementTeam === projectedTeam) {
     rows.push({ signal:"MARKET_ALIGNED", team:projectedTeam, metric:"ATS" });
+  }
+  if (qualified && snapshot?.market?.alignment === "ALIGNED" && snapshot.market.movementTeam && snapshot.market.movementTeam !== projectedTeam) {
+    rows.push({ signal:"MARKET_OPPOSES_TIER_ATS", team:snapshot.market.movementTeam, metric:"ATS" });
+    rows.push({ signal:"MARKET_OPPOSES_TIER_OUTRIGHT", team:snapshot.market.movementTeam, metric:"OUTRIGHT" });
   }
   if (qualified && count(snapshot?.historical?.supports)) {
     rows.push({ signal:"HISTORICAL_SUPPORT", team:projectedTeam, metric:"ATS" });

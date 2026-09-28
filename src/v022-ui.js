@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.25.1';
+export const APP_VERSION = '0.25.2';
 
 export function canonicalAppPage() {
   return `<!doctype html>
@@ -29,7 +29,7 @@ export function canonicalAppPage() {
 <script>
 (function(){
 'use strict';
-var VERSION='0.25.1';
+var VERSION='0.25.2';
 var params=new URLSearchParams(location.search),requestedTab=params.get('tab'),requestedWeek=Number(params.get('week'));
 var S={tab:['dashboard','games','picks','tools'].indexOf(requestedTab)>=0?requestedTab:'dashboard',dashboard:null,focus:null,pool:null,fresh:null,contributors:null,performanceContributors:null,selected:null,filter:'ALL',bucketFilter:null,signalFilter:null,season:null,week:null,activeWeek:null,loading:true,error:null};
 var TEAM={'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF','Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE','Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB','Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC','Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LAR','Miami Dolphins':'MIA','Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG','New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF','Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS'};
