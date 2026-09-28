@@ -4,8 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker from '../src/v022-entry.js';
 import { APP_VERSION, canonicalAppPage } from '../src/v022-ui.js';
 
-test('v0.25.0 serves one canonical four-screen shell',async()=>{
-  assert.equal(APP_VERSION,'0.25.0');
+test('v0.25.1 serves one canonical four-screen shell',async()=>{
+  assert.equal(APP_VERSION,'0.25.1');
   const response=await worker.fetch(new Request('https://example.com/'),{});
   assert.equal(response.status,200);
   const html=await response.text();
@@ -80,6 +80,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Load Week .+ Lines/);
   assert.match(html,/one targeted spreads \+ moneylines request/);
   assert.match(html,/Load 2026 Season Schedule/);
+  assert.match(html,/function canonicalCurrentSignal/);
+  assert.match(html,/function signalDifference/);
+  assert.match(html,/CLOSING /);
+  assert.doesNotMatch(html,/s=p\.spread\|\|spreadOf\(g\)/);
 });
 
 test('canonical shell uses approved APIs without recurring background refresh',()=>{
@@ -141,7 +145,7 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   const health=await worker.fetch(new Request('https://example.com/api/health'),{});
   assert.equal(health.status,200);
   const body=await health.json();
-  assert.equal(body.version,'0.25.0');
+  assert.equal(body.version,'0.25.1');
   assert.equal(body.canonicalBackendRouter,true);
   assert.equal(body.legacyEntryDelegation,false);
   assert.equal(body.survivorActive,false);
@@ -192,7 +196,7 @@ test('canonical backend directly serves synchronized PWA assets',async()=>{
 
   const sw=await worker.fetch(new Request('https://example.com/sw.js'),{});
   const script=await sw.text();
-  assert.match(script,/VERSION = "0\.25\.0"/);
+  assert.match(script,/VERSION = "0\.25\.1"/);
   assert.match(script,/GET_VERSION/);
   assert.doesNotMatch(script,/VERSION = "0\.7\.0"/);
 });
