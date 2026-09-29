@@ -123,7 +123,7 @@ function pool(week){
   const cached=games.find(game=>game.gameId==='g2');
   if(cached)cached.spread.sampleSize=0;
   const weekSummary={week,correct:week===1?1:0,wrong:0,pending:games.length-(week===1?1:0)};
-  return {ok:true,season:2026,week,summary:{...weekSummary,weeks:[weekSummary]},weekSummary,games,performance:signalPerformance()};
+  return {ok:true,season:2026,week,summary:{...weekSummary,weeks:[weekSummary]},weekSummary,games,checkpoint:{complete:false,pickAccuracy:week===1?100:null,counts:{scheduled:games.length,final:week===1?1:0,upcoming:week===1?1:games.length,live:0,picked:week===1?1:0,unpicked:week===1?1:games.length,correct:week===1?1:0,wrong:0,tied:0,pending:0,frozenSignals:week===1?1:0}},performance:signalPerformance()};
 }
 
 function signalPerformance(selected=null){
@@ -324,4 +324,17 @@ test('Tools makes free schedule and selected-week paid actions explicit',async({
   await expect(page.getByText('Repair Pregame Markets')).toBeVisible();
   await expect(page.getByText('FREE · rebuilds opening and closing lines from stored pre-kickoff snapshots')).toBeVisible();
   await page.screenshot({path:'test-results/v022-tools.png',fullPage:true});
+});
+
+
+test('weekly checkpoint renders on mobile Picks without horizontal overflow',async({page})=>{
+  await page.goto('http://app.local/?week=1');
+  await page.locator('[data-tab="picks"]').first().click();
+  const panel=page.getByRole('region',{name:'Weekly checkpoint'});
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText('1 of 2 games final')).toBeVisible();
+  await expect(panel.getByText('1 picked · 1 unpicked')).toBeVisible();
+  await expect(panel.getByText('Decided picks: 100% correct')).toBeVisible();
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
+  expect(overflow).toBe(false);
 });

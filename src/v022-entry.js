@@ -5,6 +5,7 @@ import {
   isAdminSessionAuthorized
 } from './admin-session.js';
 import { dashboardSnapshot, resolveDashboardWeek } from './dashboard-data.js';
+import { weeklyCheckpoint } from './weekly-checkpoint.js';
 import { consensusLinesForWeek } from './consensus.js';
 import { dataFreshness } from './data-freshness.js';
 import { d1CacheStatus, rebuildStoredHistoricalSummaries } from './d1-usage.js';
@@ -245,12 +246,18 @@ async function poolRoute(request,env,url){
     if(!Number.isInteger(target.season)||!Number.isInteger(target.week))return json({error:'No active NFL week is available'},400);
     try{
       const games=await weeklyGameOutlooks(env.DB,target.season,target.week);
+      const checkpoint=weeklyCheckpoint({season:target.season,week:target.week,
+        games:games.map(g=>({id:g.gameId,status:g.final?'COMPLETED':'SCHEDULED',
+          away_team:g.awayTeam,home_team:g.homeTeam,away_score:g.final?.awayScore??null,
+          home_score:g.final?.homeScore??null,kickoff_at:g.kickoffAt})),
+        picks:games.filter(g=>g.pick).map(g=>({gameId:g.gameId,team:g.pick})),
+        snapshots:games.filter(g=>g.originalThesis).map(g=>({gameId:g.gameId})),now:new Date()});
       const [summary,performance]=await Promise.all([
         poolSeasonSummary(env.DB,target.season),
         signalPerformance(env.DB,target.season)
       ]);
       return json({
-        ok:true,season:target.season,week:target.week,games,summary,weekSummary:summary.weeks.find((row)=>row.week===target.week)??{week:target.week,correct:0,wrong:0,pending:0},performance,
+        ok:true,season:target.season,week:target.week,games,checkpoint,summary,weekSummary:summary.weeks.find((row)=>row.week===target.week)??{week:target.week,correct:0,wrong:0,pending:0},performance,
         principle:'Game Outlook explains agreement and conflict across market, current-season spread, history and context. It does not manufacture a new probability.',
         percentageLabel:'market_no_vig_win_probability'
       });
