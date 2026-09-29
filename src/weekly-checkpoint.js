@@ -1,6 +1,6 @@
 // v0.25.5 read-only weekly checkpoint. Uses stored game and signal data only.
 // No provider calls, schema changes, cron jobs or automatic writes.
-export function weeklyCheckpoint({ season, week, games = [], picks = [], snapshots = [] }) {
+export function weeklyCheckpoint({ season, week, games = [], picks = [], snapshots = [], now = new Date() }) {
   const pickByGame = new Map(picks.map(p => [String(p.gameId), p.team]));
   const snapshotByGame = new Map(snapshots.map(s => [String(s.gameId), s]));
   const counts = { scheduled: 0, final: 0, upcoming: 0, live: 0, picked: 0,
@@ -13,7 +13,7 @@ export function weeklyCheckpoint({ season, week, games = [], picks = [], snapsho
     const final = game.status === 'COMPLETED' &&
       Number.isFinite(Number(game.away_score)) && game.away_score !== null &&
       Number.isFinite(Number(game.home_score)) && game.home_score !== null;
-    const started = !final && game.kickoff_at && Date.parse(game.kickoff_at) <= Date.now();
+    const started = !final && game.kickoff_at && Date.parse(game.kickoff_at) <= new Date(now).getTime();
     let result = null;
     if (final && pick) {
       const away = Number(game.away_score), home = Number(game.home_score);
