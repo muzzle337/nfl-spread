@@ -36,3 +36,8 @@
 
 ## Open external verification
 Cloudflare account/build settings, preview isolation, and rollback configuration are not available in repository configuration. Mark these unverified until someone with Cloudflare dashboard access confirms them.
+
+## Legacy PR audit (initial, do not merge or delete yet)
+- **PR #40** (`build/v0.22-core-consolidation`): branch is 4 commits ahead and 90 behind `main`. Its unique changes are a v0.22 consolidation document, shadow entrypoint, weekly intelligence module, and associated test. Current production uses `src/v022-entry.js`; merging this old shadow architecture wholesale is unsafe. Inspect unique ideas/tests before closing.
+- **PR #52** (`fix/v0218-score-finalization-diagnostics`): branch is 10 commits ahead and 16 behind `main`. Its changes touch older `v021*` entrypoints, score/result handling, smoke checks, and tests. Compare its unique score-finalization behavior with current `src/v022-entry.js` and existing tests before closing.
+- Both PRs remain open pending a specific functionality comparison. **No branches have been deleted.**
