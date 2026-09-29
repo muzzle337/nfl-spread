@@ -149,6 +149,8 @@ async function marketRoute(request,env,url){
   }
 
   if(url.pathname==='/api/odds/nfl'&&request.method==='GET'){
+    const auth=await requireAdmin(request,env);
+    if(!auth.ok)return json({error:auth.error},auth.status);
     if(!env.ODDS_API_KEY)return json({error:'Odds API is not configured'},503);
     try{
       const result=await fetchNflMarkets({apiKey:env.ODDS_API_KEY});
