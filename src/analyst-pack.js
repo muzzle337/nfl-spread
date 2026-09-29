@@ -7,7 +7,7 @@ import { signalPerformancePack } from "./signal-performance.js";
 import { tierContributorPack } from "./tier-contributors.js";
 import { storedGameOutlooksForAnalysis } from "./weekly-picks.js";
 
-export async function buildAnalystPack(db, season, week, now = new Date()) {
+export async function buildAnalystPack(db, season, week, now = new Date(), shared = null) {
   const year=Number(season),weekNumber=Number(week);
   if (!Number.isInteger(year)) throw new Error("season is required");
   if (!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>18) throw new Error("week must be between 1 and 18");
@@ -18,8 +18,8 @@ export async function buildAnalystPack(db, season, week, now = new Date()) {
     storedGameOutlooksForAnalysis(db,year,weekNumber),
     weekResultsStatus(db,year,weekNumber,now),
     lineMovementsForWeek(db,year,weekNumber),
-    tierContributorPack(db,year),
-    signalPerformancePack(db,year)
+    shared?.tiers ?? tierContributorPack(db,year),
+    shared?.signals ?? signalPerformancePack(db,year)
   ]);
 
   return {
