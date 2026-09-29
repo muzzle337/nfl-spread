@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { seasonTierPulse, tierContributors } from "../src/tier-contributors.js";
+import { seasonTierPulse, tierContributorPack, tierContributors } from "../src/tier-contributors.js";
 
 function dbWith(rows) {
   return { prepare() { return { bind() { return { async all() { return { results: rows }; } }; } }; } };
@@ -35,4 +35,18 @@ test("season pulse always includes every completed week independently of the vie
     classification:"HomeFav",tier:"<=3",wins:1,losses:1,pushes:0,decisions:2,coverRate:50
   });
   assert.deepEqual(result.momentum["HomeFav|<=3"].map((row)=>row.week),[1,2]);
+});
+
+test("analyst tier pack exposes every category and tier from one stored-data read", async () => {
+  const rows = [
+    { id:"g1",week:1,away_team:"BUF",home_team:"HOU",away_score:24,home_score:20,away_spread:2.5,kickoff_at:"2026-09-13T17:00:00Z" },
+    { id:"g2",week:2,away_team:"SF",home_team:"LAR",away_score:10,home_score:20,away_spread:-3.5,kickoff_at:"2026-09-20T20:00:00Z" }
+  ];
+  let reads=0;
+  const db={prepare(){return {bind(){return {async all(){reads++;return {results:rows}}}}}}};
+  const result=await tierContributorPack(db,2026);
+  assert.equal(Object.keys(result.buckets).length,12);
+  assert.equal(reads,1);
+  assert.equal(result.buckets["HomeFav|<=3"].games[0].id,"g1");
+  assert.equal(result.buckets["AwayFav|<=7"].games[0].id,"g2");
 });

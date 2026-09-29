@@ -257,3 +257,32 @@ export async function weeklyGameOutlooks(db,season,week){
   Object.defineProperty(games,'cache',{value:base.cache,enumerable:false});
   return games;
 }
+
+async function storedSignalSnapshotsForWeek(db,season,week){
+  const result=await db.prepare(`SELECT game_id,payload_json,captured_at FROM game_signal_snapshots
+    WHERE season=? AND week=? ORDER BY kickoff_at,game_id`).bind(Number(season),Number(week)).all();
+  return (result.results??[]).map((row)=>{
+    try{return {gameId:row.game_id,capturedAt:row.captured_at,...JSON.parse(row.payload_json)}}
+    catch{return null}
+  }).filter(Boolean);
+}
+
+export async function storedGameOutlooksForAnalysis(db,season,week){
+  const games=await buildWeeklyOutlookBase(db,season,week);
+  const [results,snapshots]=await Promise.all([
+    resultsForWeek(db,season,week),
+    storedSignalSnapshotsForWeek(db,season,week)
+  ]);
+  const snapshotsByGame=new Map(snapshots.map((snapshot)=>[String(snapshot.gameId),snapshot]));
+  return games.map((game)=>{
+    const stored=results.get(String(game.gameId));
+    return {
+      ...game,
+      originalThesis:snapshotsByGame.get(String(game.gameId))??null,
+      final:stored&&stored.status==='COMPLETED'?{
+        awayScore:Number(stored.away_score),
+        homeScore:Number(stored.home_score)
+      }:null
+    };
+  });
+}
