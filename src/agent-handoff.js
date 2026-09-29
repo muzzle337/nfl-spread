@@ -96,7 +96,11 @@ export async function buildCompleteAgentHandoff(db, season, now = new Date()) {
   ]);
   const activeWeek=active.season===year&&Number.isInteger(active.week)?active.week:null;
   const availableWeeks=[...new Set(schedule.map((game)=>game.week))].filter((week)=>Number.isInteger(week)).sort((a,b)=>a-b);
-  const analysisWeeks=availableWeeks.filter((week)=>activeWeek===null||week<=activeWeek);
+  const marketWeeks=schedule.filter((game)=>Object.values(game.market??{}).some((value)=>value!==null&&value!==undefined&&value!==""))
+    .map((game)=>game.week);
+  const latestMarketWeek=marketWeeks.length?Math.max(...marketWeeks):null;
+  const analysisThroughWeek=Math.max(activeWeek??0,latestMarketWeek??0)||null;
+  const analysisWeeks=availableWeeks.filter((week)=>analysisThroughWeek===null||week<=analysisThroughWeek);
   const shared={tiers,signals};
   const weekly=await Promise.all(analysisWeeks.map(async(week)=>{
     const pack=await buildAnalystPack(db,year,week,now,shared);
@@ -109,11 +113,13 @@ export async function buildCompleteAgentHandoff(db, season, now = new Date()) {
     generatedAt:now.toISOString(),
     season:year,
     activeWeek,
+    latestMarketWeek,
+    analysisThroughWeek,
     source:{storedDataOnly:true,oddsApiCalled:false,providerCreditsUsed:0,personalPicksIncluded:false},
     startHere:{
       role:"Continue as both product steward and evidence-disciplined NFL analyst.",
       requiredFirstResponse:[
-        "Confirm the handoff schema, season, active week, included weeks, 12 tier buckets, and 7 signal groups.",
+        "Confirm the handoff schema, season, resolver active week, analysis-through week, included weeks, 12 tier buckets, and 7 signal groups.",
         "Summarize the product's purpose, analytical rules, current production state, accepted decisions, and open work.",
         "State any missing evidence before making claims or changes.",
         "Do not modify code, spend provider credits, or make betting recommendations until the requested task is clear."

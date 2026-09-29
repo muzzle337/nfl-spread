@@ -10,6 +10,8 @@ test("complete handoff combines the analyst brain, project continuity, and store
   assert.match(source,/tierContributorPack/);
   assert.match(source,/signalPerformancePack/);
   assert.match(source,/buildAnalystPack/);
+  assert.match(source,/latestMarketWeek/);
+  assert.match(source,/analysisThroughWeek/);
   assert.match(source,/personalPicksIncluded:false/);
   assert.match(source,/storedDataOnly:true/);
   assert.match(source,/oddsApiCalled:false/);
