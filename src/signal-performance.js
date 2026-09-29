@@ -252,6 +252,27 @@ export async function signalPerformance(db, season, selectedSignal = null) {
   };
 }
 
+export async function signalPerformancePack(db, season) {
+  const year=Number(season);
+  if (!Number.isInteger(year)) throw new Error("season is required");
+  const rows=gradeSignalRows(await storedSignalRows(db,year));
+  const aggregate=aggregateSignalPerformance(rows);
+  const contributors={};
+  for (const definition of SIGNAL_DEFINITIONS) {
+    contributors[definition.id]=rows.filter((row)=>row.signal===definition.id);
+  }
+  return {
+    season:year,
+    trackingStartedVersion:"0.24.0",
+    snapshotCount:new Set(rows.map((row)=>row.gameId)).size,
+    affectsFocus:false,
+    affectsPicks:false,
+    oddsApiCalled:false,
+    signals:aggregate.signals,
+    contributors
+  };
+}
+
 export async function signalSnapshotsForWeek(db, season, week) {
   await ensureSignalPerformanceSchema(db);
   const result=await db.prepare(`SELECT game_id,payload_json,captured_at FROM game_signal_snapshots

@@ -4,6 +4,8 @@ import { dedupeCanonicalMatchups } from "./team-codes.js";
 
 const ALLOWED_CLASSES = new Set(["AwayDog", "AwayFav", "HomeDog", "HomeFav"]);
 const ALLOWED_TIERS = new Set(["<=3", "<=7", ">7"]);
+const CLASSIFICATIONS = [...ALLOWED_CLASSES];
+const TIERS = [...ALLOWED_TIERS];
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -69,11 +71,7 @@ export async function seasonTierPulse(db, season) {
   };
 }
 
-export async function tierContributors(db, season, classification, tier) {
-  const year = Number(season);
-  if (!Number.isInteger(year)) throw new Error("season is required");
-  if (!ALLOWED_CLASSES.has(classification) || !ALLOWED_TIERS.has(tier)) throw new Error("Unsupported category or tier");
-  const rows = await settledSeasonGames(db,year);
+function contributorsFromRows(rows, year, classification, tier) {
   const games = [];
   for (const row of rows) {
     const game = normalizedSettled(row);
@@ -103,4 +101,25 @@ export async function tierContributors(db, season, classification, tier) {
     coverRate: decisions ? Math.round(wins / decisions * 1000) / 10 : null,
     momentum: bucketMomentum(games,classification,tier), games
   };
+}
+
+export async function tierContributors(db, season, classification, tier) {
+  const year = Number(season);
+  if (!Number.isInteger(year)) throw new Error("season is required");
+  if (!ALLOWED_CLASSES.has(classification) || !ALLOWED_TIERS.has(tier)) throw new Error("Unsupported category or tier");
+  return contributorsFromRows(await settledSeasonGames(db,year),year,classification,tier);
+}
+
+export async function tierContributorPack(db, season) {
+  const year = Number(season);
+  if (!Number.isInteger(year)) throw new Error("season is required");
+  const rows = await settledSeasonGames(db,year);
+  const buckets = {};
+  for (const classification of CLASSIFICATIONS) {
+    for (const tier of TIERS) {
+      const key=`${classification}|${tier}`;
+      buckets[key]=contributorsFromRows(rows,year,classification,tier);
+    }
+  }
+  return {season:year,buckets};
 }

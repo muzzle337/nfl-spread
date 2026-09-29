@@ -159,6 +159,7 @@ test.beforeEach(async({page})=>{
     if(url.pathname==='/api/data/freshness')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,state:'CURRENT'})});
     if(url.pathname==='/api/pool/outlooks')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(pool(week))});
     if(url.pathname==='/api/signals/performance')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(signalPerformance(url.searchParams.get('signal')))});
+    if(url.pathname==='/api/analyst/weekly-pack')return route.fulfill({status:200,contentType:'application/json',headers:{'Content-Disposition':'attachment; filename="nfl-2026-week-'+week+'-analyst-pack.json"'},body:JSON.stringify({schemaVersion:'1.0',season:2026,week,source:{storedDataOnly:true,oddsApiCalled:false,providerCreditsUsed:0},tierContributors:{buckets:[{classification:'AwayFav',tier:'<=3',games:[]}]},signalPerformance:{signals:[{id:'TIER_EDGE',contributors:[]}]}})});
     if(url.pathname==='/api/tiers/contributors')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,season:2026,throughWeek:1,classification:url.searchParams.get('classification'),tier:url.searchParams.get('tier'),wins:3,losses:2,pushes:0,decisions:5,coverRate:60,momentum:seasonPulse.momentum['AwayFav|<=3'],games:[
       {id:'c1',week:1,awayTeam:'Buffalo Bills',homeTeam:'Houston Texans',awayScore:24,homeScore:20,awaySpread:-2.5,classification:'AwayFav',tier:'<=3',outcome:'WIN'},
       {id:'c2',week:1,awayTeam:'Miami Dolphins',homeTeam:'New England Patriots',awayScore:17,homeScore:20,awaySpread:-2,classification:'AwayFav',tier:'<=3',outcome:'LOSS'},
@@ -323,6 +324,17 @@ test('Tools makes free schedule and selected-week paid actions explicit',async({
   await expect(page.getByText('PAID · one targeted spreads + moneylines request')).toBeVisible();
   await expect(page.getByText('Repair Pregame Markets')).toBeVisible();
   await expect(page.getByText('FREE · rebuilds opening and closing lines from stored pre-kickoff snapshots')).toBeVisible();
+  await expect(page.getByText('Download Week 1 Analyst Pack')).toBeVisible();
+  await expect(page.getByText('FREE · stored data, contributors and frozen signals · 0 provider credits')).toBeVisible();
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByText('Download Week 1 Analyst Pack').click();
+  const download=await downloadPromise;
+  expect(download.suggestedFilename()).toBe('nfl-2026-week-1-analyst-pack.json');
+  const content=JSON.parse(await (await import('node:fs/promises')).readFile(await download.path(),'utf8'));
+  expect(content.source).toEqual({storedDataOnly:true,oddsApiCalled:false,providerCreditsUsed:0});
+  expect(content.tierContributors.buckets).toHaveLength(1);
+  expect(content.signalPerformance.signals).toHaveLength(1);
+  await expect(page.locator('[data-output]')).toContainText('Analyst Pack downloaded · stored data only · 0 provider credits.');
   await page.screenshot({path:'test-results/v022-tools.png',fullPage:true});
 });
 

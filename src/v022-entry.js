@@ -35,6 +35,7 @@ import { importSeasonSchedule } from './schedule-sync.js';
 import { tierContributors } from './tier-contributors.js';
 import { signalPerformance } from './signal-performance.js';
 import { reconcilePregameMarkets } from './pregame-markets.js';
+import { buildAnalystPack } from './analyst-pack.js';
 
 const RESULTS_REFRESH_CRON='15 12 * * *';
 const corsHeaders={
@@ -296,6 +297,20 @@ async function freshnessRoute(request,env,url){
   try{
     return json({ok:true,...await dataFreshness(env.DB,{season:url.searchParams.get('season'),week:url.searchParams.get('week'),now:new Date()})});
   }catch(error){return json({error:'Freshness unavailable',message:error.message},400)}
+}
+
+async function analystRoute(request,env,url){
+  if(url.pathname!=='/api/analyst/weekly-pack')return null;
+  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+  if(!env.DB)return json({error:'Database is not bound'},503);
+  try{
+    const target=await targetWeek(env,url);
+    if(!Number.isInteger(target.season)||!Number.isInteger(target.week))return json({error:'No active NFL week is available'},400);
+    const pack=await buildAnalystPack(env.DB,target.season,target.week,new Date());
+    return json({ok:true,...pack},200,{
+      'content-disposition':`attachment; filename="nfl-${target.season}-week-${target.week}-analyst-pack.json"`
+    });
+  }catch(error){return json({error:'Analyst Pack unavailable',message:error.message},400)}
 }
 
 async function contextRoute(request,env,url){
@@ -580,6 +595,9 @@ async function healthRoute(env){
     tierPercentVisibleOnCards:true,
     tierContributorDrilldown:true,
     seasonTierMomentum:true,
+    analystPackExport:true,
+    analystPackUsesStoredDataOnly:true,
+    analystPackProviderCredits:0,
     fullSeasonScheduleBrowsing:true,
     selectedWeekMarketIngestion:true,
     gameCardStatusFirst:true,
@@ -654,6 +672,7 @@ export default{
       poolRoute,
       focusRoute,
       freshnessRoute,
+      analystRoute,
       contextRoute,
       historyRoute,
       cacheRoute,

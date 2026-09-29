@@ -80,6 +80,10 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/Load Week .+ Lines/);
   assert.match(html,/one targeted spreads \+ moneylines request/);
   assert.match(html,/Load 2026 Season Schedule/);
+  assert.match(html,/Download Week .+ Analyst Pack/);
+  assert.match(html,/stored data, contributors and frozen signals/);
+  assert.match(html,/\/api\/analyst\/weekly-pack/);
+  assert.match(html,/Analyst Pack downloaded · stored data only · 0 provider credits/);
   assert.match(html,/function canonicalCurrentSignal/);
   assert.match(html,/function signalDifference/);
   assert.match(html,/CLOSING /);
@@ -111,6 +115,7 @@ test('canonical shell uses approved APIs without recurring background refresh',(
   assert.match(html,/\/api\/ingest\/nfl\/results/);
   assert.match(html,/\/api\/ingest\/nfl/);
   assert.match(html,/This makes one targeted Odds API request/);
+  assert.match(html,/\/api\/analyst\/weekly-pack/);
   assert.doesNotMatch(html,/setTimeout\([^)]*load|setInterval/);
 });
 
@@ -197,6 +202,9 @@ test('canonical backend reports its contract and deactivates Survivor routes',as
   assert.equal(body.weekBaselineUsesStoredResultsOnly,true);
   assert.equal(body.categoryTierEvidenceLinks,true);
   assert.equal(body.seasonTierMomentum,true);
+  assert.equal(body.analystPackExport,true);
+  assert.equal(body.analystPackUsesStoredDataOnly,true);
+  assert.equal(body.analystPackProviderCredits,0);
 
   const survivor=await worker.fetch(new Request('https://example.com/api/survivor'),{});
   assert.equal(survivor.status,410);

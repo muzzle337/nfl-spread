@@ -4,6 +4,7 @@ import {
   aggregateSignalPerformance,
   capturePregameSignalSnapshots,
   gradeSignalRows,
+  signalPerformancePack,
   signalSnapshotForGame
 } from "../src/signal-performance.js";
 
@@ -115,4 +116,19 @@ test("market opposition is tracked separately for ATS and outright outcomes",()=
 
 test("unsupported drilldown signals are rejected",()=>{
   assert.throws(()=>aggregateSignalPerformance([],"MADE_UP"),/Unsupported signal/);
+});
+
+test("analyst signal pack includes every frozen game contributor in one stored-data read",async()=>{
+  const rows=[stored("g1",2,payload())];
+  let reads=0;
+  const db={prepare(sql){
+    if (/^SELECT s\.game_id/.test(sql.trim())) return {bind(){return {async all(){reads++;return {results:rows}}}}};
+    return {async run(){return {}}};
+  }};
+  const result=await signalPerformancePack(db,2026);
+  assert.equal(reads,1);
+  assert.equal(result.oddsApiCalled,false);
+  assert.equal(Object.keys(result.contributors).length,7);
+  assert.equal(result.contributors.TIER_EDGE[0].gameId,"g1");
+  assert.equal(result.contributors.OUTRIGHT_OUTLOOK[0].metric,"OUTRIGHT");
 });
