@@ -21,7 +21,11 @@ const ANALYST_BRAIN = Object.freeze({
   ],
   calibrationCase:{
     matchup:"Philadelphia at Chicago",
-    lesson:"Chicago's ATS tier read can be correct while a Philadelphia outright recommendation is wrong. Chicago's frozen pregame bucket and its later postgame live bucket are not interchangeable, and the outright win cannot rewrite the original recommendation."
+    status:"OWNER_REPORTED_RESULT_AWAITING_STORED_FINAL",
+    frozenEvidence:"Chicago Home Dog · 3.5–7 was 2-1 ATS (66.7%, n=3, Grade B) at Chicago +4. Market movement and the outright outlook supported Philadelphia; the stored close is Philadelphia -3.5.",
+    ownerReportedOutcome:"Chicago won outright and covered.",
+    storedDataWarning:"Production currently grades the frozen signals PENDING because the final score is not stored. Verify and store the final before recalculating season records or signal performance.",
+    lesson:"If the reported result is verified, Chicago's ATS tier read was correct while the Philadelphia outright recommendation was wrong. The frozen pregame bucket and later postgame live bucket are not interchangeable, and the result cannot rewrite the original recommendation."
   }
 });
 
@@ -66,6 +70,12 @@ const PROJECT_CONTINUITY = Object.freeze({
     "Continue collecting weeks before promoting exploratory patterns into strategies; always show contributors and counterexamples.",
     "Clean up the visible application version so it matches the shipped release milestone."
   ],
+  knownDataReconciliation:[{
+    season:2026,week:3,matchup:"Philadelphia Eagles at Chicago Bears",
+    issue:"Owner reports Chicago won outright and covered, but production still has the frozen signals as PENDING because the final score is absent.",
+    requiredAction:"Verify and store the final result, allow the existing settlement logic to grade ATS and outright signals, then regenerate the handoff. Never rewrite the frozen pregame snapshot.",
+    impact:"Week 3 completion, active-week resolution, tier totals, signal records, and any postgame Chicago conclusion remain provisional until reconciled."
+  }],
   nonNegotiables:[
     "Do not overwrite newer agent or developer changes; always integrate from the latest main branch.",
     "Do not spend provider credits for analysis or exports.",

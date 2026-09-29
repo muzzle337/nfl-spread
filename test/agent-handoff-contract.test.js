@@ -25,6 +25,9 @@ test("complete handoff captures the approved analytical and product contracts",(
   assert.match(source,/not an individual game's cover or win probability/);
   assert.match(source,/Complementary home\/away categories/);
   assert.match(source,/Philadelphia at Chicago/);
+  assert.match(source,/OWNER_REPORTED_RESULT_AWAITING_STORED_FINAL/);
+  assert.match(source,/knownDataReconciliation/);
+  assert.match(source,/Never rewrite the frozen pregame snapshot/);
   assert.match(source,/Tier Pulse is season-to-date/);
   assert.match(source,/One screen has one canonical renderer/);
   assert.match(source,/Shared-user pick isolation is unresolved/);
