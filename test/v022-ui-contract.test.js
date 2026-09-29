@@ -81,9 +81,13 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/one targeted spreads \+ moneylines request/);
   assert.match(html,/Load 2026 Season Schedule/);
   assert.match(html,/Download Week .+ Analyst Pack/);
-  assert.match(html,/stored data, contributors and frozen signals/);
+  assert.match(html,/selected-week evidence only/);
   assert.match(html,/\/api\/analyst\/weekly-pack/);
   assert.match(html,/Analyst Pack downloaded · stored data only · 0 provider credits/);
+  assert.match(html,/Download Complete Agent Handoff/);
+  assert.match(html,/brain, decisions, project state and all completed\/current weeks/);
+  assert.match(html,/\/api\/analyst\/complete-handoff/);
+  assert.match(html,/Complete Agent Handoff downloaded · one file · stored data only · 0 provider credits/);
   assert.match(html,/function canonicalCurrentSignal/);
   assert.match(html,/function signalDifference/);
   assert.match(html,/CLOSING /);

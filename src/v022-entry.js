@@ -36,6 +36,7 @@ import { tierContributors } from './tier-contributors.js';
 import { signalPerformance } from './signal-performance.js';
 import { reconcilePregameMarkets } from './pregame-markets.js';
 import { buildAnalystPack } from './analyst-pack.js';
+import { buildCompleteAgentHandoff } from './agent-handoff.js';
 
 const RESULTS_REFRESH_CRON='15 12 * * *';
 const corsHeaders={
@@ -300,12 +301,19 @@ async function freshnessRoute(request,env,url){
 }
 
 async function analystRoute(request,env,url){
-  if(url.pathname!=='/api/analyst/weekly-pack')return null;
+  if(!url.pathname.startsWith('/api/analyst/'))return null;
   if(request.method!=='GET')return json({error:'Method not allowed'},405);
   if(!env.DB)return json({error:'Database is not bound'},503);
   try{
     const target=await targetWeek(env,url);
     if(!Number.isInteger(target.season)||!Number.isInteger(target.week))return json({error:'No active NFL week is available'},400);
+    if(url.pathname==='/api/analyst/complete-handoff'){
+      const handoff=await buildCompleteAgentHandoff(env.DB,target.season,new Date());
+      return json({ok:true,...handoff},200,{
+        'content-disposition':`attachment; filename="nfl-${target.season}-complete-agent-handoff.json"`
+      });
+    }
+    if(url.pathname!=='/api/analyst/weekly-pack')return null;
     const pack=await buildAnalystPack(env.DB,target.season,target.week,new Date());
     return json({ok:true,...pack},200,{
       'content-disposition':`attachment; filename="nfl-${target.season}-week-${target.week}-analyst-pack.json"`
@@ -598,6 +606,11 @@ async function healthRoute(env){
     analystPackExport:true,
     analystPackUsesStoredDataOnly:true,
     analystPackProviderCredits:0,
+    completeAgentHandoff:true,
+    completeAgentHandoffIncludesBrain:true,
+    completeAgentHandoffIncludesProjectContinuity:true,
+    completeAgentHandoffUsesStoredDataOnly:true,
+    completeAgentHandoffProviderCredits:0,
     fullSeasonScheduleBrowsing:true,
     selectedWeekMarketIngestion:true,
     gameCardStatusFirst:true,
