@@ -11,6 +11,9 @@ Audit date: 2026-09-28. This is a **repository-only inventory**, not a productio
 - `src/history-schema.js` / `ensureHistorySchema`: `historical_games`, `historical_import_runs`, `historical_coach_summaries`, `historical_evidence_summaries`, `situational_history_cache`, `weekly_outlook_cache`.
 - `src/market-schema.js` / `ensureMarketSchema`: `moneyline_snapshots`.
 
+- `src/weekly-picks.js`: `weekly_pool_picks` (also ensures `weekly_outlook_cache`, already listed under history; reconcile definitions before migration). This table currently stores shared picks without a per-user key.
+- `src/signal-performance.js`: `game_signal_snapshots` and `idx_signal_snapshots_season_week`; frozen pregame signal data must remain immutable.
+
 This list is deliberately **not claimed exhaustive**. Inspect all remaining `CREATE TABLE`, `ALTER TABLE`, and index statements in source before writing ordered migrations, including the canonical entrypoint and weekly-picks/signal code.
 
 ## Migration implementation acceptance criteria
