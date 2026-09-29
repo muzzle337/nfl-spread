@@ -196,7 +196,7 @@ jobs:
           outlook=json.loads(os.environ['OUTLOOK'])
           performance=outlook.get('performance') or {}
           signals=performance.get('signals') or []
-          expected={'TIER_EDGE':'ATS','MARKET_ALIGNED':'ATS','HISTORICAL_SUPPORT':'ATS','SITUATIONAL_SUPPORT':'OUTRIGHT','OUTRIGHT_OUTLOOK':'OUTRIGHT'}
+          expected={'TIER_EDGE':'ATS','MARKET_ALIGNED':'ATS','MARKET_OPPOSES_TIER_ATS':'ATS','MARKET_OPPOSES_TIER_OUTRIGHT':'OUTRIGHT','HISTORICAL_SUPPORT':'ATS','SITUATIONAL_SUPPORT':'OUTRIGHT','OUTRIGHT_OUTLOOK':'OUTRIGHT'}
           actual={row.get('id'):row.get('metric') for row in signals}
           if actual != expected:
               raise SystemExit(f'Unexpected signal definitions: {actual}')
