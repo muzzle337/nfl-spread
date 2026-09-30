@@ -96,18 +96,20 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.match(html,/pts since Week/);
   assert.match(html,/Entering W/);
   assert.match(html,/Live Season/);
-  assert.match(html,/Cumulative season record before this week versus now/);
+  assert.match(html,/How the week is developing/);
   assert.match(html,/data-pulse-mode/);
-  assert.match(html,/remaining W/);
+  assert.match(html,/games/);
 });
 
 test('canonical shell uses approved APIs without recurring background refresh',()=>{
   const html=canonicalAppPage();
   assert.match(html,/\/api\/dashboard\/nfl/);
-  assert.match(html,/\/api\/focus\/opportunities/);
   assert.match(html,/q\('\/api\/pool\/outlooks'\)/);
   assert.match(html,/q\('\/api\/dashboard\/nfl'\)/);
-  assert.match(html,/q\('\/api\/focus\/opportunities'\)/);
+  assert.match(html,/function loadSecondary/);
+  assert.match(html,/S\.focus=\{games:x\.games\|\|\[\]\}/);
+  assert.match(html,/class="trend-line"/);
+  assert.match(html,/polyline/);
   assert.match(html,/\/api\/data\/freshness/);
   assert.match(html,/\/api\/tiers\/contributors/);
   assert.match(html,/\/api\/signals\/performance/);
