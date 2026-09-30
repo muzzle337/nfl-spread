@@ -25,7 +25,7 @@ test('canonical client runtime compiles and exposes audited screen contracts',()
   assert.equal(scripts.length,1);
   scripts.forEach(script=>assert.doesNotThrow(()=>new Function(script)));
 
-  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+trendWatch\(\)\+performance\(\)\+focus\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
+  assert.match(html,/function dashboard\(\).*status\(\)\+pulse\(\)\+trendWatch\(\)\+focus\(\)\+performance\(\)\+resultsSummary\(\)\+pickSummary\(\)/);
   assert.match(html,/function games\(\).*gamesSection\(\)/);
   assert.match(html,/function picks\(\)/);
   assert.match(html,/data-week-select/);
