@@ -193,7 +193,8 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await expect(focusCard).toContainText('60%');
   await expect(focusCard).toContainText('3-2 · n=5');
   await expect(focusCard).toContainText('ML -125');
-  await expect(focusCard).toContainText('Strategy: Spread');
+  await expect(focusCard).toContainText('Read:');
+  await expect(focusCard).toContainText('Positive category');
   await expect(page.locator('.focus-row').filter({hasText:'SF @ LAR'})).toHaveCount(0);
   await page.screenshot({path:'test-results/v022-dashboard.png',fullPage:true});
 
