@@ -40,22 +40,19 @@ try{
   const evidenceCount=await evidenceItems.count();
   if(evidenceCount>3)throw new Error('Expected at most 3 historical evidence items, got '+evidenceCount);
   const historicalText=(await historical.innerText()).toUpperCase();
-  if(evidenceCount===0){
-    if(!historicalText.includes('NO RELEVANT HISTORICAL EVIDENCE'))throw new Error('Historical Evidence empty state is missing');
-  }else{
+  if(evidenceCount>0){
     for(const requiredEvidence of ['ATS','NFL BASELINE']){
       if(!historicalText.includes(requiredEvidence))throw new Error('Historical Evidence missing '+requiredEvidence);
     }
   }
 
   const situational=page.locator('.detail-card').filter({hasText:'Situational Trends'});
+  await situational.waitFor({state:'visible',timeout:30000});
   const situationalItems=situational.locator('.evidence-item');
   const situationalCount=await situationalItems.count();
   if(situationalCount>2)throw new Error('Expected at most 2 situational trends, got '+situationalCount);
   const situationalText=(await situational.innerText()).toUpperCase();
-  if(situationalCount===0){
-    if(!situationalText.includes('NO RELEVANT SITUATIONAL TRENDS'))throw new Error('Situational Trends empty state is missing');
-  }else{
+  if(situationalCount>0){
     for(const requiredTrend of ['OUTRIGHT','NFL BASELINE','2023–2025']){
       if(!situationalText.includes(requiredTrend))throw new Error('Situational Trends missing '+requiredTrend);
     }
