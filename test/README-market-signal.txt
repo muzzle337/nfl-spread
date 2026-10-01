@@ -1,0 +1,1 @@
+Market signal UI acceptance is covered by market-signal-context.test.js.
