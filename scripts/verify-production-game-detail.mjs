@@ -38,10 +38,14 @@ try{
   await historical.waitFor({state:'visible',timeout:30000});
   const evidenceItems=historical.locator('.evidence-item');
   const evidenceCount=await evidenceItems.count();
-  if(evidenceCount<1||evidenceCount>3)throw new Error('Expected 1-3 historical evidence items, got '+evidenceCount);
+  if(evidenceCount>3)throw new Error('Expected at most 3 historical evidence items, got '+evidenceCount);
   const historicalText=(await historical.innerText()).toUpperCase();
-  for(const requiredEvidence of ['ATS','NFL BASELINE']){
-    if(!historicalText.includes(requiredEvidence))throw new Error('Historical Evidence missing '+requiredEvidence);
+  if(evidenceCount===0){
+    if(!historicalText.includes('NO RELEVANT HISTORICAL EVIDENCE'))throw new Error('Historical Evidence empty state is missing');
+  }else{
+    for(const requiredEvidence of ['ATS','NFL BASELINE']){
+      if(!historicalText.includes(requiredEvidence))throw new Error('Historical Evidence missing '+requiredEvidence);
+    }
   }
 
   const situational=page.locator('.detail-card').filter({hasText:'Situational Trends'});
