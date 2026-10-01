@@ -51,10 +51,14 @@ try{
   const situational=page.locator('.detail-card').filter({hasText:'Situational Trends'});
   const situationalItems=situational.locator('.evidence-item');
   const situationalCount=await situationalItems.count();
-  if(situationalCount<1||situationalCount>2)throw new Error('Expected 1-2 situational trends, got '+situationalCount);
+  if(situationalCount>2)throw new Error('Expected at most 2 situational trends, got '+situationalCount);
   const situationalText=(await situational.innerText()).toUpperCase();
-  for(const requiredTrend of ['OUTRIGHT','NFL BASELINE','2023–2025']){
-    if(!situationalText.includes(requiredTrend))throw new Error('Situational Trends missing '+requiredTrend);
+  if(situationalCount===0){
+    if(!situationalText.includes('NO RELEVANT SITUATIONAL TRENDS'))throw new Error('Situational Trends empty state is missing');
+  }else{
+    for(const requiredTrend of ['OUTRIGHT','NFL BASELINE','2023–2025']){
+      if(!situationalText.includes(requiredTrend))throw new Error('Situational Trends missing '+requiredTrend);
+    }
   }
 
   await page.screenshot({path:'production-game-detail-check.png',fullPage:true});
