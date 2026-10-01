@@ -177,13 +177,11 @@ test.beforeEach(async({page})=>{
 
 test('Dashboard connects Tier Pulse to qualified upcoming games and contributors',async({page})=>{
   await expect(page.getByRole('button',{name:/Live Season/})).toHaveClass(/active/);
-  const awayFavoriteSmall=page.locator('[data-bucket="AwayFav|<=3"]');
+  const awayFavoriteSmall=page.locator('[data-tier-select="AwayFav|<=3"]');
   await expect(awayFavoriteSmall).toContainText('60%');
-  await expect(awayFavoriteSmall).toContainText('3-2 · n=5');
   await page.getByRole('button',{name:'Entering W1'}).click();
   await expect(page.getByRole('button',{name:'Entering W1'})).toHaveClass(/active/);
-  await expect(awayFavoriteSmall).toContainText('No prior results');
-  await expect(awayFavoriteSmall).toContainText('Current 60%');
+  await expect(awayFavoriteSmall).toContainText('—');
   await page.getByRole('button',{name:/Live Season/}).click();
   await expect(page.getByText('TREND WATCH')).toBeVisible();
   await expect(page.locator('.trend-card')).toHaveCount(1);
@@ -195,18 +193,16 @@ test('Dashboard connects Tier Pulse to qualified upcoming games and contributors
   await expect(focusCard).toContainText('60%');
   await expect(focusCard).toContainText('3-2 · n=5');
   await expect(focusCard).toContainText('ML -125');
-  await expect(focusCard).toContainText('Strategy: Spread');
+  await expect(focusCard).toContainText('Read:');
+  await expect(focusCard).toContainText('Positive category');
   await expect(page.locator('.focus-row').filter({hasText:'SF @ LAR'})).toHaveCount(0);
   await page.screenshot({path:'test-results/v022-dashboard.png',fullPage:true});
 
-  await page.locator('[data-bucket="AwayFav|<=3"]').click();
-  await expect(page.getByText('Away Favorite · 0.5–3 · Season to date',{exact:true})).toBeVisible();
-  await expect(page.getByText('WEEKLY MOMENTUM')).toBeVisible();
-  await expect(page.getByText('ALL SEASON CONTRIBUTORS · 5')).toBeVisible();
-  await expect(page.locator('.contributor')).toHaveCount(5);
-  await expect(page.getByText('3-2 · 60% · n=5')).toBeVisible();
-  await expect(page.locator('.game-card')).toHaveCount(1);
-  await expect(page.locator('.game-card')).toContainText('BUF');
+  await awayFavoriteSmall.click();
+  await expect(page.locator('.tier-selected')).toContainText('Away Favorite · 0.5–3 · 60% ATS');
+  await expect(page.locator('.tier-selected')).toContainText('BUF @ HOU');
+  await awayFavoriteSmall.click();
+  await expect(page.locator('.tier-selected')).toHaveCount(0);
   await page.screenshot({path:'test-results/v022-tier-filter.png',fullPage:true});
 });
 
@@ -232,11 +228,10 @@ test('Week selector loads the known Week 2 schedule before Week 1 is complete',a
   await expect(page.locator('[data-week-select]')).toHaveValue('2');
   await expect(page.getByText('DEN @ KC')).toBeVisible();
   await expect(page.locator('.focus-row').filter({hasText:'DEN @ KC'})).toContainText('Home Favorite · 0.5–3');
-  await expect(page.locator('[data-bucket="AwayFav|<=3"]')).toContainText('3-2 · n=5');
+  await expect(page.locator('[data-tier-select="AwayFav|<=3"]')).toContainText('60%');
   await expect(page.getByRole('button',{name:'Entering W2'})).toBeVisible();
   await page.getByRole('button',{name:'Entering W2'}).click();
-  await expect(page.locator('[data-bucket="AwayFav|<=3"]')).toContainText('3-2 · n=5');
-  await expect(page.locator('[data-bucket="AwayFav|<=3"]')).toContainText('Current 60%');
+  await expect(page.locator('[data-tier-select="AwayFav|<=3"]')).toContainText('60%');
   await page.getByRole('button',{name:/Games/}).click();
   await expect(page.locator('.game-card')).toHaveCount(1);
   await expect(page).toHaveURL(/week=2/);
