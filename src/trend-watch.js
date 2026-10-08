@@ -46,7 +46,7 @@ function currentMatches(games, classification, tier) {
   }));
 }
 
-export function buildTrendWatch(pulse, games, { minimumRate = 55, limit = 3 } = {}) {
+export function buildTrendWatch(pulse, games, { minimumRate = 55, limit = 4 } = {}) {
   const candidates = [];
   for (const tier of TIERS) {
     for (const [first, second] of PAIRS) {
