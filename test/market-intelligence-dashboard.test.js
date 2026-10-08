@@ -14,13 +14,14 @@ test('qualified Dashboard cards render Market Intelligence context',()=>{
 });
 
 test('qualified games prioritize confirmation and demote conflicts without changing tier percentages',()=>{
-  const start=source.indexOf('function focusGames()');
+  const start=source.indexOf('function focusMarketRank');
   const end=source.indexOf('function gameRead',start);
   assert.ok(start>=0&&end>start);
   const focus=source.slice(start,end);
   assert.match(focus,/marketSignalContext/);
   assert.match(focus,/confirm/);
   assert.match(focus,/conflict/);
+  assert.match(focus,/focusMarketRank\(b\)-focusMarketRank\(a\)/);
   assert.doesNotMatch(focus,/projectedCoverRate\s*[+\-*/]=/);
 });
 
