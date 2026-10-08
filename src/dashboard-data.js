@@ -2,7 +2,7 @@ import { projectionsForWeek } from "./projection.js";
 import { weekResultsStatus } from "./result-sync.js";
 import { settleAgainstSpread } from "./engine.js";
 import { seasonTierPulse } from "./tier-contributors.js";
-import { dedupeCanonicalMatchups } from "./team-codes.js";
+import { canonicalTeamCode, dedupeCanonicalMatchups } from "./team-codes.js";
 import { buildTrendWatch } from "./trend-watch.js";
 
 function finiteNumber(value) {
@@ -55,6 +55,56 @@ function postgameAnalysis(game, final, liveWeekStats) {
     tier,
     liveBucket: bucket
   };
+}
+
+function blankTeamRecord() {
+  return { wins:0, losses:0, ties:0, pointsFor:0, pointsAgainst:0, pointDiff:0 };
+}
+
+export function buildTeamRecordsFromGames(games) {
+  const records = new Map();
+  function recordFor(team) {
+    const code = canonicalTeamCode(team);
+    if (!records.has(code)) records.set(code, blankTeamRecord());
+    return records.get(code);
+  }
+
+  for (const game of dedupeCanonicalMatchups(Array.isArray(games) ? games : [])) {
+    if (String(game?.status ?? "").toUpperCase() !== "COMPLETED") continue;
+    const awayScore = finiteNumber(game.away_score ?? game.awayScore);
+    const homeScore = finiteNumber(game.home_score ?? game.homeScore);
+    if (awayScore === null || homeScore === null) continue;
+    const away = recordFor(game.away_team ?? game.awayTeam);
+    const home = recordFor(game.home_team ?? game.homeTeam);
+    away.pointsFor += awayScore;
+    away.pointsAgainst += homeScore;
+    home.pointsFor += homeScore;
+    home.pointsAgainst += awayScore;
+    if (awayScore > homeScore) {
+      away.wins += 1;
+      home.losses += 1;
+    } else if (homeScore > awayScore) {
+      home.wins += 1;
+      away.losses += 1;
+    } else {
+      away.ties += 1;
+      home.ties += 1;
+    }
+  }
+
+  for (const record of records.values()) record.pointDiff = record.pointsFor - record.pointsAgainst;
+  return records;
+}
+
+async function teamRecordsThroughWeek(db, season, week) {
+  const result = await db.prepare(`
+    SELECT id,season,week,away_team,home_team,status,away_score,home_score
+    FROM games
+    WHERE season = ? AND week <= ? AND season_type = 'REGULAR'
+      AND status = 'COMPLETED' AND away_score IS NOT NULL AND home_score IS NOT NULL
+    ORDER BY week ASC,id ASC
+  `).bind(season, week).all();
+  return buildTeamRecordsFromGames(result.results ?? []);
 }
 
 export async function resolveDashboardWeek(db) {
@@ -114,10 +164,11 @@ export async function dashboardSnapshot(db, now = new Date(), selected = null) {
     };
   }
 
-  const [projection, results, seasonPulse] = await Promise.all([
+  const [projection, results, seasonPulse, teamRecords] = await Promise.all([
     projectionsForWeek(db, target.season, target.week),
     weekResultsStatus(db, target.season, target.week, now),
-    seasonTierPulse(db, target.season)
+    seasonTierPulse(db, target.season),
+    teamRecordsThroughWeek(db, target.season, target.week)
   ]);
 
   const resultById = new Map((results.games ?? []).map((game) => [String(game.id), game]));
@@ -130,11 +181,14 @@ export async function dashboardSnapshot(db, now = new Date(), selected = null) {
     const live = !isFinal && result?.status === "LIVE" && awayScore !== null && homeScore !== null
       ? { awayScore, homeScore }
       : null;
+    const awayRecord = teamRecords.get(canonicalTeamCode(game.awayTeam)) ?? blankTeamRecord();
+    const homeRecord = teamRecords.get(canonicalTeamCode(game.homeTeam)) ?? blankTeamRecord();
     return {
       ...game,
       status: result?.status ?? game.status ?? null,
       final,
       live,
+      teamRecords:{ away:{...awayRecord}, home:{...homeRecord} },
       postgame: postgameAnalysis(game, final, projection.liveWeekStats)
     };
   });
