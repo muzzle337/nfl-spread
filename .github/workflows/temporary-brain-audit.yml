@@ -9,32 +9,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Fetch stored Week 6 Analyst Pack (no odds API calls)
+      - name: Fetch stored Week 6 Analyst Pack
         shell: bash
         run: |
+          set -euo pipefail
+          BASE="https://nfl-spread-api.sanro4.workers.dev"
+          echo "HEALTH"
+          curl -fsS --max-time 60 -A "curl/8.5.0" "$BASE/api/health"
+          echo
+          echo "ANALYST_PACK"
+          curl -fsS --max-time 60 -A "curl/8.5.0" "$BASE/api/analyst/weekly-pack?season=2026&week=6" -o /tmp/pack.json
           python3 - <<'PY'
-          import json,urllib.request
-          base="https://nfl-spread-api.sanro4.workers.dev"
-          for endpoint in ["/api/health","/api/analyst/weekly-pack?season=2026&week=6"]:
-            try:
-              with urllib.request.urlopen(base+endpoint,timeout=55) as r:
-                d=json.load(r)
-              if endpoint=="/api/health":
-                print("HEALTH",json.dumps({k:d.get(k) for k in ("ok","version","canonicalShell")}))
-                continue
-              print("PACK_META",json.dumps({k:d.get(k) for k in ("generatedAt","season","week","source","freshness")},default=str)[:5000])
-              for key in ("dashboard","outlooks","focus","results","movements","tierContributors","signalPerformance"):
-                v=d.get(key)
-                print("SECTION",key,"KEYS",list(v) if isinstance(v,dict) else "array")
-              games=d.get("dashboard",{}).get("games",[])
-              print("DASHBOARD_GAMES",len(games))
-              for g in games:
-                print("DASH_GAME",json.dumps(g,separators=(',',':'),default=str)[:10500])
-              for g in d.get("outlooks",{}).get("games",[]):
-                print("OUTLOOK",json.dumps(g,separators=(',',':'),default=str)[:10500])
-              for g in d.get("movements",[]):
-                print("MOVEMENT",json.dumps(g,separators=(',',':'),default=str)[:2000])
-            except Exception as e:
-              print("FETCH_ERROR",endpoint,type(e).__name__,str(e))
-              raise
+          import json
+          d=json.load(open("/tmp/pack.json"))
+          print("META",json.dumps({k:d.get(k) for k in ("generatedAt","season","week","source","freshness")},default=str))
+          dash=d.get("dashboard",{})
+          print("TREND_WATCH",json.dumps(dash.get("trendWatch"),separators=(',',':'),default=str))
+          print("SEASON_PULSE",json.dumps(dash.get("seasonPulse"),separators=(',',':'),default=str))
+          for g in dash.get("games",[]):
+              print("DASH_GAME",json.dumps(g,separators=(',',':'),default=str))
+          for g in d.get("focus",{}).get("games",[]) if isinstance(d.get("focus"),dict) else d.get("focus",[]):
+              print("FOCUS",json.dumps(g,separators=(',',':'),default=str))
+          for g in d.get("outlooks",{}).get("games",[]):
+              print("OUTLOOK",json.dumps(g,separators=(',',':'),default=str))
+          for g in d.get("movements",[]):
+              print("MOVEMENT",json.dumps(g,separators=(',',':'),default=str))
           PY
