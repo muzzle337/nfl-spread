@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Fetch stored Week 6 Analyst Pack
+      - name: Fetch stored Week 5 Analyst Pack
         shell: bash
         run: |
           set -euo pipefail
@@ -18,7 +18,7 @@ jobs:
           curl -fsS --max-time 60 -A "curl/8.5.0" "$BASE/api/health"
           echo
           echo "ANALYST_PACK"
-          curl -fsS --max-time 60 -A "curl/8.5.0" "$BASE/api/analyst/weekly-pack?season=2026&week=6" -o /tmp/pack.json
+          curl -fsS --max-time 60 -A "curl/8.5.0" "$BASE/api/analyst/weekly-pack?season=2026&week=5" -o /tmp/pack.json
           python3 - <<'PY'
           import json
           d=json.load(open("/tmp/pack.json"))
