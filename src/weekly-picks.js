@@ -5,7 +5,7 @@ import { lineMovementsForWeek } from "./line-movement.js";
 import { capturePregameSignalSnapshots, signalSnapshotsForWeek } from "./signal-performance.js";
 import { projectConsensusGame } from "./projection.js";
 
-const OUTLOOK_CACHE_SCHEMA_VERSION = 7;
+const OUTLOOK_CACHE_SCHEMA_VERSION = 8;
 
 function finite(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
 
@@ -128,6 +128,27 @@ function signalChange(opening, current) {
   };
 }
 
+export function poolWinEdge(game, history, movement) {
+  const awayP = finite(game?.moneyline?.awayWinProbability);
+  const homeP = finite(game?.moneyline?.homeWinProbability);
+  if (awayP === null && homeP === null) return { team:null, winProbability:null, confidence:"LOW INFO", leverage:"NONE", reasons:[] };
+
+  const marketTeam = awayP >= homeP ? game.awayTeam : game.homeTeam;
+  const marketP = Math.max(awayP ?? 0, homeP ?? 0);
+  const historicalTeam = historicalOutrightDirection(history, game.awayTeam, game.homeTeam);
+  const toward = movement?.direction === "TOWARD_AWAY" ? game.awayTeam : movement?.direction === "TOWARD_HOME" ? game.homeTeam : null;
+  const reasons = ["Moneyline probability is the primary outright-win signal."];
+  let score = marketP;
+  if (historicalTeam === marketTeam) { score += 3; reasons.push("Historical outright context agrees."); }
+  if (toward === marketTeam) { score += 2; reasons.push("Market movement agrees."); }
+  if (game?.projectedTeam === marketTeam) { score += 1; reasons.push("ATS Brain agrees, used only as supporting context."); }
+
+  const winProbability = Math.max(1, Math.min(99, Math.round(score * 10) / 10));
+  const confidence = winProbability >= 70 ? "SAFE FAVORITE" : winProbability >= 58 ? "LEAN" : "COIN FLIP";
+  const leverage = marketP < 50 && winProbability >= 55 ? "UPSET EDGE" : historicalTeam === marketTeam && toward === marketTeam ? "FIELD EDGE" : "NONE";
+  return { team:marketTeam, winProbability, marketProbability:marketP, confidence, leverage, reasons };
+}
+
 export function outlookLabel(game,history,context){
   const awayP=finite(game.moneyline?.awayWinProbability),homeP=finite(game.moneyline?.homeWinProbability);
   const outright=awayP===null&&homeP===null?null:(awayP>=homeP?game.awayTeam:game.homeTeam);
@@ -203,6 +224,7 @@ async function buildWeeklyOutlookBase(db,season,week){
       history:h?{away:{coach:h.away.coach,overall:h.away.overall,notable:notableSummary(h.away)},home:{coach:h.home.coach,overall:h.home.overall,notable:notableSummary(h.home)},notableCount:h.notableCount,evidence:h.evidence||[],evidenceSummary:h.evidenceSummary||{supports:0,conflicts:0,neutral:0},situational:h.situational||[],situationalSummary:h.situationalSummary||{supports:0,conflicts:0,neutral:0}}:null,
       context:c?{venue:[c.stadium,c.roof,c.surface].filter(Boolean).join(' · '),weather:c.weather,rest:{away:c.awayRest,home:c.homeRest},observations:c.observations||[],quality:c.quality}:null,
       outlook:label,
+      poolEdge:poolWinEdge(g,h,m),
       openingSignal,
       currentSignal,
       signalChange:signalChange(openingSignal,currentSignal)

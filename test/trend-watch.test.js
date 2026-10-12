@@ -42,10 +42,24 @@ test("Trend Watch selects one winning side per complementary pair and exposes mo
   assert.equal(rows.some((row)=>row.key==="HomeDog|<=3"),false);
 });
 
-test("Trend Watch excludes pairs with no side at the established 55 percent threshold",()=>{
+test("Trend Watch excludes flat pairs with no side at the established 55 percent threshold",()=>{
   const rows=buildTrendWatch({buckets:{
     "AwayDog|<=7":{wins:6,losses:6,decisions:12,coverRate:50},
     "HomeFav|<=7":{wins:6,losses:6,decisions:12,coverRate:50}
   },momentum:{}},[]);
   assert.deepEqual(rows,[]);
+});
+
+
+test("Trend Watch surfaces a strengthening below-threshold category as momentum watch",()=>{
+  const rows=buildTrendWatch({buckets:{
+    "AwayDog|<=7":{wins:5,losses:6,decisions:11,coverRate:45.5},
+    "HomeFav|<=7":{wins:6,losses:5,decisions:11,coverRate:54.5}
+  },momentum:{
+    "HomeFav|<=7":[{week:4,weekly:{coverRate:40}},{week:5,weekly:{coverRate:60}}]
+  }},[]);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].key,"HomeFav|<=7");
+  assert.equal(rows[0].momentumCandidate,true);
+  assert.equal(rows[0].watchReason,"RISING_BELOW_THRESHOLD");
 });
