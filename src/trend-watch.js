@@ -46,8 +46,37 @@ function currentMatches(games, classification, tier) {
   }));
 }
 
+function candidateFor(pulse, games, classification, oppositeClassification, tier, selected, opposite, minimumRate) {
+  const rate = finite(selected?.coverRate);
+  if (rate === null) return null;
+  const trend = momentumRead(momentum(pulse, classification, tier));
+  const qualifies = rate >= minimumRate;
+  const risingBelowThreshold = !qualifies && trend.status === "STRENGTHENING" && trend.delta > 0;
+  if (!qualifies && !risingBelowThreshold) return null;
+  const matches = currentMatches(games, classification, tier);
+  return {
+    key:`${classification}|${tier}`,
+    classification,
+    oppositeClassification,
+    tier,
+    wins:Number(selected?.wins ?? 0),
+    losses:Number(selected?.losses ?? 0),
+    pushes:Number(selected?.pushes ?? 0),
+    decisions:Number(selected?.decisions ?? 0),
+    coverRate:rate,
+    oppositeCoverRate:finite(opposite?.coverRate),
+    momentum:trend,
+    qualifies,
+    momentumCandidate:risingBelowThreshold,
+    watchReason:qualifies ? "THRESHOLD" : "RISING_BELOW_THRESHOLD",
+    currentWeekMatches:matches,
+    currentWeekMatchCount:matches.length
+  };
+}
+
 export function buildTrendWatch(pulse, games, { minimumRate = 55, limit = 4 } = {}) {
-  const candidates = [];
+  const qualified = [];
+  const momentumCandidates = [];
   for (const tier of TIERS) {
     for (const [first, second] of PAIRS) {
       const firstBucket = bucket(pulse, first, tier);
@@ -59,27 +88,22 @@ export function buildTrendWatch(pulse, games, { minimumRate = 55, limit = 4 } = 
       const oppositeClassification = classification === first ? second : first;
       const selected = classification === first ? firstBucket : secondBucket;
       const opposite = classification === first ? secondBucket : firstBucket;
-      const rate = finite(selected?.coverRate);
-      if (rate === null || rate < minimumRate) continue;
-      const matches = currentMatches(games, classification, tier);
-      candidates.push({
-        key:`${classification}|${tier}`,
-        classification,
-        oppositeClassification,
-        tier,
-        wins:Number(selected?.wins ?? 0),
-        losses:Number(selected?.losses ?? 0),
-        pushes:Number(selected?.pushes ?? 0),
-        decisions:Number(selected?.decisions ?? 0),
-        coverRate:rate,
-        oppositeCoverRate:finite(opposite?.coverRate),
-        momentum:momentumRead(momentum(pulse, classification, tier)),
-        currentWeekMatches:matches,
-        currentWeekMatchCount:matches.length
-      });
+      const candidate = candidateFor(pulse, games, classification, oppositeClassification, tier, selected, opposite, minimumRate);
+      if (!candidate) continue;
+      if (candidate.qualifies) qualified.push(candidate);
+      else momentumCandidates.push(candidate);
     }
   }
-  return candidates
-    .sort((a,b) => b.coverRate - a.coverRate || b.decisions - a.decisions || a.key.localeCompare(b.key))
-    .slice(0,Math.max(0,Number(limit) || 0));
+
+  qualified.sort((a,b) => b.coverRate - a.coverRate || b.decisions - a.decisions || a.key.localeCompare(b.key));
+  momentumCandidates.sort((a,b) => (b.momentum?.delta ?? 0) - (a.momentum?.delta ?? 0) || b.coverRate - a.coverRate || b.decisions - a.decisions || a.key.localeCompare(b.key));
+
+  const requested = Math.max(4, Number(limit) || 0);
+  const output = qualified.slice(0, requested);
+  for (const candidate of momentumCandidates) {
+    if (output.length >= requested) break;
+    output.push(candidate);
+  }
+
+  return output;
 }
