@@ -1,27 +1,34 @@
 import baseWorker from './v022-entry.js';
-import { brainReadClient } from './brain-read-ui.js';
 
-function brainScriptResponse(){
-  return new Response(brainReadClient,{
-    headers:{
-      'content-type':'application/javascript; charset=utf-8',
-      'cache-control':'no-store'
-    }
-  });
-}
+const BRAIN_READ_CLIENT = String.raw`(function(){
+'use strict';
+var scheduled=false;
+function text(el){return el?(el.textContent||'').trim():''}
+function numberFrom(value){var m=String(value||'').match(/-?\d+(?:\.\d+)?/);return m?Number(m[0]):null}
+function gradeRank(g){return g==='A'?3:g==='B'?2:g==='C'?1:0}
+function trendRead(card){var read=text(card.querySelector('.consult-read'));if(/trend\s*↑/i.test(read))return {key:'up',label:'📈 Rising',score:1};if(/trend\s*↓/i.test(read))return {key:'down',label:'📉 Cooling',score:-1};if(/trend stable/i.test(read))return {key:'flat',label:'➡️ Stable',score:0};return {key:'none',label:'— Trend',score:0}}
+function movementBucket(card){var read=text(card.querySelector('.market-read span')),m=read.match(/(\d+(?:\.\d+)?)\s*pt/i),mag=m?Number(m[1]):null;if(mag===null){if(/under 1 point/i.test(read))return {label:'0–0.5',mag:.5};return {label:'0',mag:0}}if(mag>=2)return {label:'2+',mag:mag};if(mag>=1)return {label:'1–1.5',mag:mag};if(mag>.001)return {label:'0.5',mag:mag};return {label:'0',mag:0}}
+function marketRead(card){var el=card.querySelector('.market-read'),cls=el?el.className:'',bucket=movementBucket(card);if(/\bconfirm\b/.test(cls))return {key:'confirm',label:'✅ Confirms',score:1,bucket:bucket};if(/\bconflict\b/.test(cls))return {key:'conflict',label:'⚠️ Opposes',score:-2,bucket:bucket};return {key:'neutral',label:'💰 Neutral',score:0,bucket:bucket}}
+function readCard(card){var grade=text(card.querySelector('.grade')),rate=numberFrom(text(card.querySelector('.focus-rate'))),sampleMatch=text(card.querySelector('.focus-rate span')).match(/n=(\d+)/i),sample=sampleMatch?Number(sampleMatch[1]):0,trend=trendRead(card),market=marketRead(card),score=gradeRank(grade);if(rate!==null&&rate>=65)score++;if(sample>=10)score++;score+=trend.score+market.score;var confidence=score>=6?'A':score>=4?'B':score>=2?'C':'PASS',action;if(confidence==='PASS')action={key:'pass',label:'🚫 PASS'};else if(market.key==='conflict'&&trend.key==='down')action={key:'fade',label:'🔻 FADE'};else if(confidence==='A'&&trend.key==='up'&&market.key!=='conflict')action={key:'ride',label:'🔥 RIDE'};else if(market.key==='conflict'||trend.key==='down')action={key:'watch',label:'⚠️ WATCH'};else action={key:'lean',label:'✅ LEAN'};return {id:card.getAttribute('data-game'),grade:grade,rate:rate,sample:sample,trend:trend,market:market,confidence:confidence,score:score,action:action,match:text(card.querySelector('.focus-match')),category:text(card.querySelector('.focus-category')),record:text(card.querySelector('.focus-rate span'))}}
+function explain(x){var parts=[];parts.push('Brain '+(x.grade||'—')+' · '+(x.rate===null?'—':x.rate+'%')+' · '+x.record);parts.push(x.trend.label);parts.push(x.market.label+' · move '+x.market.bucket.label);return parts.join(' · ')}
+function decisionLayer(x){var el=document.createElement('div');el.className='brain-decision-layer';el.innerHTML='<span class="brain-action '+x.action.key+'">'+x.action.label+'</span><span class="brain-chip">🧠 Brain '+(x.grade||'—')+'</span><span class="brain-chip">Confidence '+x.confidence+'</span><span class="brain-chip">'+x.trend.label+'</span><div class="brain-why">'+explain(x)+'</div>';return el}
+function decorate(cards){cards.forEach(function(card){if(card.querySelector('.brain-decision-layer'))return;var x=readCard(card);card.__brainRead=x;var middle=card.querySelector(':scope > span:nth-child(2)')||card;middle.appendChild(decisionLayer(x))})}
+function board(cards){var main=document.querySelector('.dashboard-main');if(!main)return;var old=main.querySelector('.brain-board');if(old)old.remove();var rows=cards.map(function(card){return card.__brainRead||readCard(card)}).sort(function(a,b){return b.score-a.score||(b.rate||0)-(a.rate||0)}),strong=rows.filter(function(x){return x.action.key==='ride'||x.action.key==='lean'}).slice(0,5),watch=rows.filter(function(x){return x.action.key==='watch'||x.action.key==='fade'||x.action.key==='pass'}).slice(0,4);if(!rows.length)return;function row(x,i){return '<button class="brain-board-row" data-brain-target="'+x.id+'"><span class="brain-rank">'+(i+1)+'</span><span><strong>'+x.match+'</strong><small>'+x.category+' · '+x.trend.label+' · '+x.market.label+' · move '+x.market.bucket.label+'</small></span><span class="brain-board-action '+x.action.key+'">'+x.action.label+'<small>Conf '+x.confidence+'</small></span></button>'}var section=document.createElement('section');section.className='section brain-board';section.innerHTML='<div class="section-head"><div><div class="section-title">Brain Board</div><div class="focus-evidence">Dashboard tier → trend → market → action</div></div><div class="section-meta">ATS decision layer</div></div>'+(strong.length?'<div class="brain-group"><div class="brain-group-title">🔥 Best ATS Signals</div><div class="brain-board-list">'+strong.map(row).join('')+'</div></div>':'')+(watch.length?'<div class="brain-group"><div class="brain-group-title">⚠️ Watch / Fade / Pass</div><div class="brain-board-list">'+watch.map(row).join('')+'</div></div>':'');var status=main.querySelector('.status');if(status&&status.nextSibling)main.insertBefore(section,status.nextSibling);else main.prepend(section);section.querySelectorAll('[data-brain-target]').forEach(function(btn){btn.onclick=function(){var id=btn.getAttribute('data-brain-target'),target=main.querySelector('.focus-row[data-game="'+id+'"]');if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.focus()}}})}
+function apply(){var cards=Array.from(document.querySelectorAll('.dashboard-main .focus-row[data-game]'));if(!cards.length)return;decorate(cards);board(cards)}
+function schedule(){if(scheduled)return;scheduled=true;(window.requestAnimationFrame||setTimeout)(function(){scheduled=false;apply()})}
+var css='.brain-decision-layer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)}.brain-chip,.brain-action{border:1px solid rgba(255,255,255,.08);background:#0a1017;border-radius:7px;padding:6px 4px;font-size:8px;font-weight:900;text-align:center}.brain-action.ride,.brain-board-action.ride{color:var(--green);border-color:rgba(114,220,102,.3);background:rgba(114,220,102,.05)}.brain-action.lean,.brain-board-action.lean{color:var(--blue);border-color:rgba(76,166,255,.3)}.brain-action.watch,.brain-board-action.watch{color:var(--yellow);border-color:rgba(225,196,91,.3)}.brain-action.fade,.brain-action.pass,.brain-board-action.fade,.brain-board-action.pass{color:var(--red);border-color:rgba(239,142,142,.3)}.brain-why{grid-column:1/-1;color:var(--muted);font-size:8px;line-height:1.4}.brain-group+.brain-group{margin-top:10px}.brain-group-title{font-size:9px;font-weight:950;margin:0 2px 6px}.brain-board-list{display:grid;gap:6px}.brain-board-row{width:100%;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:11px;padding:9px}.brain-rank{width:26px;height:26px;border-radius:8px;background:var(--panel2);display:grid;place-items:center;font-weight:950}.brain-board-row strong{font-size:11px}.brain-board-row small{display:block;color:var(--muted);font-size:8px;line-height:1.35;margin-top:2px}.brain-board-action{border:1px solid var(--border);border-radius:8px;padding:6px 7px;font-size:8px;font-weight:950;text-align:center}.brain-board-action small{font-size:7px}@media(max-width:600px){.brain-decision-layer{grid-template-columns:repeat(2,minmax(0,1fr))}.brain-chip,.brain-action{font-size:10px}.brain-why{font-size:10px}.brain-board-row strong{font-size:13px}.brain-board-row small{font-size:10px}.brain-board-action{font-size:10px}.brain-group-title{font-size:11px}}';var style=document.createElement('style');style.textContent=css;document.head.appendChild(style);var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule);else schedule();
+})();`;
 
 async function withBrainUi(request,env,ctx){
-  const url=new URL(request.url);
-  if(url.pathname==='/brain-read.js') return brainScriptResponse();
-
   const response=await baseWorker.fetch(request,env,ctx);
+  const url=new URL(request.url);
   if(request.method!=='GET'||url.pathname!=='/') return response;
   const type=response.headers.get('content-type')||'';
   if(!type.includes('text/html')) return response;
 
   const html=await response.text();
-  if(html.includes('/brain-read.js')) return new Response(html,response);
-  const injected=html.replace('</body>','<script src="/brain-read.js" defer></script></body>');
+  if(html.includes('brain-decision-layer')) return new Response(html,{status:response.status,statusText:response.statusText,headers:response.headers});
+  const injected=html.replace('</body>',`<script>${BRAIN_READ_CLIENT}</script></body>`);
   const headers=new Headers(response.headers);
   headers.delete('content-length');
   headers.set('cache-control','no-store');
