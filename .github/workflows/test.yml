@@ -16,28 +16,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Query Week 5 production dashboard data
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, urllib.request
-          base='https://nfl-spread-api.sanro4.workers.dev'
-          def get(path):
-              with urllib.request.urlopen(base+path, timeout=45) as r:
-                  return json.load(r)
-          movement=get('/api/lines/movement/dashboard?season=2026&week=5')
-          dashboard=get('/api/dashboard/nfl?season=2026&week=5')
-          moves=movement.get('movements') or []
-          qualifying=[m for m in moves if isinstance(m.get('movementMagnitude'),(int,float)) and abs(m.get('movementMagnitude'))>=1.0]
-          print('WEEK5_MOVEMENTS='+json.dumps(qualifying,separators=(',',':')))
-          games=dashboard.get('games') or []
-          qids={str(m.get('gameId')) for m in qualifying}
-          qgames=[g for g in games if str(g.get('gameId') or g.get('id')) in qids]
-          print('WEEK5_DASHBOARD_GAMES='+json.dumps(qgames,separators=(',',':')))
-          print('DASHBOARD_TOP_KEYS='+json.dumps(sorted(dashboard.keys())))
-          print('DASHBOARD_GAME_KEYS='+json.dumps(sorted(games[0].keys()) if games else []))
-          PY
       - name: Install dependencies
         run: npm install
       - name: Run engine tests
