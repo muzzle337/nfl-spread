@@ -1,0 +1,82 @@
+name: Patch dashboard brain decision layer
+
+on:
+  push:
+    branches:
+      - build/dashboard-brain-read
+    paths:
+      - .github/workflows/patch-dashboard-brain.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build/dashboard-brain-read
+          fetch-depth: 0
+      - name: Apply dashboard decision UI
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/v022-ui.js')
+          s = p.read_text()
+          s = s.replace("export const APP_VERSION = '0.25.3';", "export const APP_VERSION = '0.26.0';")
+
+          css_anchor = ".focus-rate span{display:block;font-size:7px;color:var(--muted);margin-top:2px}"
+          css_add = css_anchor + ".brain-read{display:grid;grid-template-columns:auto auto auto auto;gap:5px;margin-top:7px}.brain-pill{border:1px solid rgba(255,255,255,.08);background:#0a1017;border-radius:7px;padding:5px 6px;font-size:7px;font-weight:900;text-align:center;white-space:nowrap}.brain-pill.ride{color:var(--green);border-color:rgba(114,220,102,.28);background:rgba(114,220,102,.06)}.brain-pill.watch{color:var(--yellow);border-color:rgba(225,196,91,.28);background:rgba(225,196,91,.06)}.brain-pill.fade{color:var(--red);border-color:rgba(239,142,142,.28);background:rgba(239,142,142,.06)}.brain-pill.lean{color:var(--blue);border-color:rgba(76,166,255,.28);background:rgba(76,166,255,.06)}.brain-why{grid-column:1/-1;color:var(--muted);font-size:8px;line-height:1.35;padding-top:1px}"
+          if css_anchor not in s:
+              raise SystemExit('CSS anchor missing')
+          s = s.replace(css_anchor, css_add, 1)
+
+          fn_anchor = "function focus(){"
+          helpers = r'''function decisionTrend(g){var b=projectedBucket(g),m=b&&b.momentum||[],last=m.length?m[m.length-1]:null,prev=m.length>1?m[m.length-2]:null,lv=last&&last.cumulative?num(last.cumulative.coverRate):null,pv=prev&&prev.cumulative?num(prev.cumulative.coverRate):null,status=last&&last.status;if(status==='STRENGTHENING'||(lv!==null&&pv!==null&&lv>pv))return {key:'up',label:'📈 Rising'};if(status==='COOLING'||(lv!==null&&pv!==null&&lv<pv))return {key:'down',label:'📉 Cooling'};if(lv!==null)return {key:'flat',label:'➡️ Stable'};return {key:'none',label:'— Trend'};}
+function decisionMarket(g){var r=marketSignalContext(g);if(r.key==='confirm')return {key:'confirm',label:'💰 Confirms'};if(r.key==='conflict')return {key:'conflict',label:'⚠️ Opposes'};return {key:'neutral',label:'💰 Neutral'};}
+function decisionConfidence(g){var grade=String(g.grade||''),rate=num(g.projectedCoverRate),n=Number(g.sampleSize||0),t=decisionTrend(g),m=decisionMarket(g),score=grade==='A'?3:grade==='B'?2:grade==='C'?1:0;if(rate!==null&&rate>=65)score+=1;if(n>=10)score+=1;if(t.key==='up')score+=1;if(t.key==='down')score-=1;if(m.key==='confirm')score+=1;if(m.key==='conflict')score-=2;if(score>=6)return 'A';if(score>=4)return 'B';if(score>=2)return 'C';return 'PASS';}
+function decisionAction(g){var c=decisionConfidence(g),t=decisionTrend(g),m=decisionMarket(g);if(c==='PASS')return {key:'fade',label:'🚫 PASS'};if(m.key==='conflict'&&t.key==='down')return {key:'fade',label:'🔻 FADE'};if(c==='A'&&t.key==='up'&&m.key!=='conflict')return {key:'ride',label:'🔥 RIDE'};if(m.key==='conflict'||t.key==='down')return {key:'watch',label:'⚠️ WATCH'};return {key:'lean',label:'✅ LEAN'};}
+function brainWhy(g){var t=decisionTrend(g),m=decisionMarket(g),b=projectedBucket(g),rec=b?record(b):'—',parts=[];parts.push(cls(projectedClass(g))+' · '+tier(g.classification&&g.classification.tier)+' · '+pct(g.projectedCoverRate)+' · '+rec+' · n='+Number(g.sampleSize||0));parts.push(t.label);parts.push(m.label);return parts.join(' · ');}
+function brainReadHtml(g){var a=decisionAction(g),c=decisionConfidence(g),t=decisionTrend(g),m=decisionMarket(g);return '<div class="brain-read"><span class="brain-pill '+e(a.key)+'">'+e(a.label)+'</span><span class="brain-pill">🧠 Brain '+e(g.grade||'—')+'</span><span class="brain-pill">Confidence '+e(c)+'</span><span class="brain-pill">'+e(t.label)+'</span><span class="brain-why">'+e(brainWhy(g))+'</span></div>';}
+'''
+          if fn_anchor not in s:
+              raise SystemExit('focus anchor missing')
+          s = s.replace(fn_anchor, helpers + fn_anchor, 1)
+
+          old = "+marketSignalHtml(g)+'<span class=\"consult-read\"><b>Read:</b> '+e(gameRead(g))+'</span>"
+          new = "+marketSignalHtml(g)+brainReadHtml(g)+'<span class=\"consult-read\"><b>Read:</b> '+e(gameRead(g))+'</span>"
+          if old not in s:
+              raise SystemExit('focus row anchor missing')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+      - name: Add decision-layer tests
+        shell: bash
+        run: |
+          cat > test/dashboard-brain-ui.test.js <<'EOF'
+          import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import { canonicalAppPage, APP_VERSION } from '../src/v022-ui.js';
+
+          test('dashboard exposes brain, confidence, trend and ride/fade language', () => {
+            const html = canonicalAppPage();
+            assert.equal(APP_VERSION, '0.26.0');
+            assert.match(html, /Confidence/);
+            assert.match(html, /RIDE/);
+            assert.match(html, /FADE/);
+            assert.match(html, /Rising/);
+            assert.match(html, /Cooling/);
+            assert.match(html, /brain-read/);
+          });
+          EOF
+      - name: Run tests
+        run: npm test
+      - name: Commit generated changes
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v022-ui.js test/dashboard-brain-ui.test.js
+          git commit -m "Add dashboard brain read and ride-fade signals"
+          git push origin HEAD:build/dashboard-brain-read
