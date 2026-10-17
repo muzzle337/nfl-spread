@@ -1,0 +1,42 @@
+name: Agent Week 6 Production Check
+
+on:
+  push:
+    branches: [agent-week6-check-20261017]
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-week6:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Week 6 analyst pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=6'
+          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' "$URL" -o week6.json
+          python - <<'PY'
+          import json
+          d=json.load(open('week6.json'))
+          print('schemaVersion=',d.get('schemaVersion'))
+          print('generatedAt=',d.get('generatedAt'))
+          print('season=',d.get('season'),'week=',d.get('week'))
+          print('source=',d.get('source'))
+          dash=d.get('dashboard') or {}
+          print('gameCount=',dash.get('gameCount'),'focusCount=',dash.get('focusCount'))
+          print('statsThroughWeek=',dash.get('statsThroughWeek'))
+          print('openingWeekStats=',json.dumps((dash.get('openingWeekStats') or {}).get('buckets') or {}, separators=(',',':')))
+          print('liveWeekStats=',json.dumps((dash.get('liveWeekStats') or {}).get('buckets') or {}, separators=(',',':')))
+          print('signalPerformance=',json.dumps(d.get('signalPerformance') or {}, separators=(',',':')))
+          print('movements=',json.dumps(d.get('movements') or {}, separators=(',',':')))
+          print('outlooks=',json.dumps(d.get('outlooks') or {}, separators=(',',':')))
+          print('focus=',json.dumps(d.get('focus') or {}, separators=(',',':')))
+          print('freshness=',json.dumps(d.get('freshness') or {}, separators=(',',':')))
+          PY
+      - name: Upload Week 6 pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: week6-analyst-pack
+          path: week6.json
