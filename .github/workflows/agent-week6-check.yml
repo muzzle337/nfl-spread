@@ -1,42 +1,48 @@
-name: Agent Week 6 Production Check
-
+name: Agent Weeks 4-7 Production Reconciliation
 on:
   push:
     branches: [agent-week6-check-20261017]
-
 permissions:
   contents: read
-
 jobs:
-  fetch-week6:
+  fetch-packs:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch Week 6 analyst pack
+      - name: Fetch and reconcile production analyst packs
         shell: bash
         run: |
           set -euo pipefail
-          URL='https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=6'
-          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' "$URL" -o week6.json
+          for week in 4 5 6 7; do
+            curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$week" -o "week$week.json"
+          done
           python - <<'PY'
           import json
-          d=json.load(open('week6.json'))
-          print('schemaVersion=',d.get('schemaVersion'))
-          print('generatedAt=',d.get('generatedAt'))
-          print('season=',d.get('season'),'week=',d.get('week'))
-          print('source=',d.get('source'))
-          dash=d.get('dashboard') or {}
-          print('gameCount=',dash.get('gameCount'),'focusCount=',dash.get('focusCount'))
-          print('statsThroughWeek=',dash.get('statsThroughWeek'))
-          print('openingWeekStats=',json.dumps((dash.get('openingWeekStats') or {}).get('buckets') or {}, separators=(',',':')))
-          print('liveWeekStats=',json.dumps((dash.get('liveWeekStats') or {}).get('buckets') or {}, separators=(',',':')))
-          print('signalPerformance=',json.dumps(d.get('signalPerformance') or {}, separators=(',',':')))
-          print('movements=',json.dumps(d.get('movements') or {}, separators=(',',':')))
-          print('outlooks=',json.dumps(d.get('outlooks') or {}, separators=(',',':')))
-          print('focus=',json.dumps(d.get('focus') or {}, separators=(',',':')))
-          print('freshness=',json.dumps(d.get('freshness') or {}, separators=(',',':')))
+          for week in (4,5,6,7):
+            d=json.load(open(f'week{week}.json'))
+            print('\n=== WEEK',week,'===')
+            print('generatedAt=',d.get('generatedAt'),'source=',d.get('source'))
+            dash=d.get('dashboard') or {}
+            print('dashboard=', json.dumps({k:v for k,v in dash.items() if k in ('gameCount','focusCount','statsThroughWeek')},separators=(',',':')))
+            print('openingBuckets=',json.dumps((dash.get('openingWeekStats') or {}).get('buckets'),separators=(',',':'))[:4500])
+            print('liveBuckets=',json.dumps((dash.get('liveWeekStats') or {}).get('buckets'),separators=(',',':'))[:4500])
+            sp=d.get('signalPerformance') or {}
+            print('signalPerformance=',json.dumps(sp,separators=(',',':'))[:4500])
+            print('freshness=',json.dumps(d.get('freshness'),separators=(',',':'))[:1700])
+            for key in ('outlooks','movements','focus'):
+              obj=d.get(key)
+              if isinstance(obj,dict):
+                print(key+'_keys=',list(obj))
+                games=obj.get('games') or obj.get('rows') or []
+              else:games=obj if isinstance(obj,list) else []
+              print(key+'_count=',len(games))
+              if key=='outlooks':
+                for g in games:
+                  print('GAME',json.dumps(g,separators=(',',':'))[:1300])
+              if key=='movements':
+                for g in games:print('MOVE',json.dumps(g,separators=(',',':'))[:700])
           PY
-      - name: Upload Week 6 pack
+      - name: Upload production packs
         uses: actions/upload-artifact@v4
         with:
-          name: week6-analyst-pack
-          path: week6.json
+          name: production-weeks-4-7-packs
+          path: week*.json
