@@ -1,48 +1,32 @@
-name: Agent Weeks 4-7 Production Reconciliation
+name: Live Week 7 Brain Reconciliation
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  fetch-packs:
+  fetch:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch and reconcile production analyst packs
-        shell: bash
+      - name: Fetch latest week 7 pack
         run: |
-          set -euo pipefail
-          for week in 4 5 6 7; do
-            curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$week" -o "week$week.json"
-          done
+          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=7' -o week7.json
           python - <<'PY'
           import json
-          for week in (4,5,6,7):
-            d=json.load(open(f'week{week}.json'))
-            print('\n=== WEEK',week,'===')
-            print('generatedAt=',d.get('generatedAt'),'source=',d.get('source'))
-            dash=d.get('dashboard') or {}
-            print('dashboard=', json.dumps({k:v for k,v in dash.items() if k in ('gameCount','focusCount','statsThroughWeek')},separators=(',',':')))
-            print('openingBuckets=',json.dumps((dash.get('openingWeekStats') or {}).get('buckets'),separators=(',',':'))[:4500])
-            print('liveBuckets=',json.dumps((dash.get('liveWeekStats') or {}).get('buckets'),separators=(',',':'))[:4500])
-            sp=d.get('signalPerformance') or {}
-            print('signalPerformance=',json.dumps(sp,separators=(',',':'))[:4500])
-            print('freshness=',json.dumps(d.get('freshness'),separators=(',',':'))[:1700])
-            for key in ('outlooks','movements','focus'):
-              obj=d.get(key)
-              if isinstance(obj,dict):
-                print(key+'_keys=',list(obj))
-                games=obj.get('games') or obj.get('rows') or []
-              else:games=obj if isinstance(obj,list) else []
-              print(key+'_count=',len(games))
-              if key=='outlooks':
-                for g in games:
-                  print('GAME',json.dumps(g,separators=(',',':'))[:1300])
-              if key=='movements':
-                for g in games:print('MOVE',json.dumps(g,separators=(',',':'))[:700])
+          d=json.load(open('week7.json'))
+          print('GENERATED',d.get('generatedAt'),'SOURCE',d.get('source'))
+          print('FRESH',json.dumps(d.get('freshness'),separators=(',',':'))[:2300])
+          z=d.get('dashboard') or {}
+          for key in ('openingWeekStats','liveWeekStats'):
+            print('BUCKET',key,json.dumps((z.get(key) or {}).get('buckets'),separators=(',',':')))
+          sp=d.get('signalPerformance') or {}
+          for x in sp.get('signals',[]):
+            print('SIGNAL',x.get('id'),x.get('metric'),x.get('wins'),x.get('losses'),x.get('pushes'),x.get('rate'),json.dumps(x.get('weeks',[])[-2:],separators=(',',':')))
+          for x in (d.get('outlooks') or {}).get('games',[]):
+            m=x.get('movement') or {};s=x.get('spread') or {};a=x.get('market') or {}
+            print('GAME',x.get('gameId'),x.get('awayTeam'),'@',x.get('homeTeam'),'ATS',s.get('projectedTeam'),s.get('coverRate'),s.get('grade'),'LINE',s.get('away'),'MOVE',m.get('movementMagnitude'),m.get('direction'),'ML%',a.get('awayWinPct'),a.get('homeWinPct'),'STATUS',x.get('status'))
           PY
-      - name: Upload production packs
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: production-weeks-4-7-packs
-          path: week*.json
+          name: week7-20261025-live-brain
+          path: week7.json
