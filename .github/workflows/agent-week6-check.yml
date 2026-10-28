@@ -1,4 +1,4 @@
-name: Live Week 7 Brain Reconciliation
+name: Live Week 8 Brain Reconciliation
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -10,10 +10,10 @@ jobs:
     steps:
       - name: Fetch latest week 7 pack
         run: |
-          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=7' -o week7.json
+          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=8' -o week8.json
           python - <<'PY'
           import json
-          d=json.load(open('week7.json'))
+          d=json.load(open('week8.json'))
           print('GENERATED',d.get('generatedAt'),'SOURCE',d.get('source'))
           print('FRESH',json.dumps(d.get('freshness'),separators=(',',':'))[:2300])
           z=d.get('dashboard') or {}
@@ -28,5 +28,5 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: week7-20261025-live-brain
-          path: week7.json
+          name: week8-20261025-live-brain
+          path: week8.json
