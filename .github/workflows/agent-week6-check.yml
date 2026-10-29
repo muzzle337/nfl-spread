@@ -1,36 +1,39 @@
-name: Week 8 Latest Movement Audit
+name: Week 1-7 Closing Spread Residual Audit
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  fetch:
+  audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch latest week 7 pack
+      - name: Audit final margin against closing spread
+        shell: bash
         run: |
-          curl -fsS -A 'Mozilla/5.0 NFL-Spread-Analyst/1.0' 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=8' -o week8.json
+          for w in 1 2 3 4 5 6 7; do
+            curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week='$w -o week$w.json
+          done
           python - <<'PY'
-          import json
-          d=json.load(open('week8.json'))
-          print('GENERATED',d.get('generatedAt'),'SOURCE',d.get('source'))
-          print('FRESH',json.dumps(d.get('freshness'),separators=(',',':'))[:2300])
-          z=d.get('dashboard') or {}
-          for key in ('openingWeekStats','liveWeekStats'):
-            print('BUCKET',key,json.dumps((z.get(key) or {}).get('buckets'),separators=(',',':')))
-          sp=d.get('signalPerformance') or {}
-          for x in sp.get('signals',[]):
-            print('SIGNAL',x.get('id'),x.get('metric'),x.get('wins'),x.get('losses'),x.get('pushes'),x.get('rate'),json.dumps(x.get('weeks',[])[-2:],separators=(',',':')))
-          print('KEYS',list(d.keys()))
-          for k,v in d.items():
-            if 'movement' in k.lower() or 'performance' in k.lower():
-              print('MOVEMENT_SECTION',k,json.dumps(v,separators=(',',':'))[:12000])
-          for x in (d.get('outlooks') or {}).get('games',[]):
-            m=x.get('movement') or {};s=x.get('spread') or {};a=x.get('market') or {}
-            print('GAME',x.get('gameId'),x.get('awayTeam'),'@',x.get('homeTeam'),'ATS',s.get('projectedTeam'),s.get('coverRate'),s.get('grade'),'LINE',s.get('away'),'MOVE',m.get('movementMagnitude'),m.get('direction'),'ML%',a.get('awayWinPct'),a.get('homeWinPct'),'STATUS',x.get('status'))
+          import json,statistics,collections
+          a=[]; rows=[]
+          for w in range(1,8):
+            d=json.load(open('week%d.json'%w))
+            m={x['gameId']:x for x in d['movements']}
+            for g in d['results']['games']:
+              if g.get('awayScore') is None or g.get('homeScore') is None: continue
+              x=m.get(g['id'])
+              if not x or x.get('closingHomeSpread') is None: continue
+              margin=g['homeScore']-g['awayScore']
+              exp=-x['closingHomeSpread']
+              r=margin-exp
+              a.append((w,g['awayTeam'],g['homeTeam'],margin,exp,r))
+          print('AUDIT_GAMES',len(a),'WEEK_COUNTS',dict(collections.Counter(x[0] for x in a)))
+          for n in [0,1,2,3,3.5,4,5,7,10,14]:
+            print('DIST',n,sum(abs(x[5])<=n for x in a),round(sum(abs(x[5])<=n for x in a)/len(a)*100,1))
+          print('MEDIAN_ABS_ERROR',statistics.median(abs(x[5]) for x in a),'MEAN_ABS_ERROR',round(statistics.mean(abs(x[5]) for x in a),2))
+          for w in range(1,8):
+            z=[x for x in a if x[0]==w]
+            print('WEEK',w,'N',len(z),'IN3',sum(abs(x[5])<=3 for x in z),'IN7',sum(abs(x[5])<=7 for x in z))
+          print('BIG_FINAL_DEVIATIONS',[(w,a[:13],b[:13],round(r,1)) for w,a,b,margin,exp,r in a if abs(r)>=20][:25])
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: week8-oct29-ats-brain
-          path: week8.json
