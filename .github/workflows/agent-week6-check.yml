@@ -1,4 +1,4 @@
-name: Week 8 ATS Trends Check Oct29
+name: Week 8 Latest Movement Audit
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -22,6 +22,10 @@ jobs:
           sp=d.get('signalPerformance') or {}
           for x in sp.get('signals',[]):
             print('SIGNAL',x.get('id'),x.get('metric'),x.get('wins'),x.get('losses'),x.get('pushes'),x.get('rate'),json.dumps(x.get('weeks',[])[-2:],separators=(',',':')))
+          print('KEYS',list(d.keys()))
+          for k,v in d.items():
+            if 'movement' in k.lower() or 'performance' in k.lower():
+              print('MOVEMENT_SECTION',k,json.dumps(v,separators=(',',':'))[:12000])
           for x in (d.get('outlooks') or {}).get('games',[]):
             m=x.get('movement') or {};s=x.get('spread') or {};a=x.get('market') or {}
             print('GAME',x.get('gameId'),x.get('awayTeam'),'@',x.get('homeTeam'),'ATS',s.get('projectedTeam'),s.get('coverRate'),s.get('grade'),'LINE',s.get('away'),'MOVE',m.get('movementMagnitude'),m.get('direction'),'ML%',a.get('awayWinPct'),a.get('homeWinPct'),'STATUS',x.get('status'))
