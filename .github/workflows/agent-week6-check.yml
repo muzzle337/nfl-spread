@@ -1,4 +1,4 @@
-name: Live Week 8 Brain Reconciliation
+name: Week 8 ATS Trends Check Oct29
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -28,5 +28,5 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: week8-20261025-live-brain
+          name: week8-oct29-ats-brain
           path: week8.json
