@@ -1,39 +1,24 @@
-name: Week 1-7 Closing Spread Residual Audit
+name: Week 8 Post Thursday Parlay Refresh
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  audit:
+  refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Audit final margin against closing spread
-        shell: bash
+      - name: Pull latest production pack and print signals
         run: |
-          for w in 1 2 3 4 5 6 7; do
-            curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week='$w -o week$w.json
-          done
+          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=8' -o pack.json
           python - <<'PY'
-          import json,statistics,collections
-          a=[]; rows=[]
-          for w in range(1,8):
-            d=json.load(open('week%d.json'%w))
-            m={x['gameId']:x for x in d['movements']}
-            for g in d['results']['games']:
-              if g.get('awayScore') is None or g.get('homeScore') is None: continue
-              x=m.get(g['id'])
-              if not x or x.get('closingHomeSpread') is None: continue
-              margin=g['homeScore']-g['awayScore']
-              exp=-x['closingHomeSpread']
-              r=margin-exp
-              a.append((w,g['awayTeam'],g['homeTeam'],margin,exp,r))
-          print('AUDIT_GAMES',len(a),'WEEK_COUNTS',dict(collections.Counter(x[0] for x in a)))
-          for n in [0,1,2,3,3.5,4,5,7,10,14]:
-            print('DIST',n,sum(abs(x[5])<=n for x in a),round(sum(abs(x[5])<=n for x in a)/len(a)*100,1))
-          print('MEDIAN_ABS_ERROR',statistics.median(abs(x[5]) for x in a),'MEAN_ABS_ERROR',round(statistics.mean(abs(x[5]) for x in a),2))
-          for w in range(1,8):
-            z=[x for x in a if x[0]==w]
-            print('WEEK',w,'N',len(z),'IN3',sum(abs(x[5])<=3 for x in z),'IN7',sum(abs(x[5])<=7 for x in z))
-          print('BIG_FINAL_DEVIATIONS',[(w,a[:13],b[:13],round(r,1)) for w,a,b,margin,exp,r in a if abs(r)>=20][:25])
+          import json
+          d=json.load(open('pack.json'))
+          print('FRESHNESS',json.dumps(d.get('freshness'),separators=(',',':'))[:1500])
+          print('SIGNALS',[(x['id'],x['wins'],x['losses'],x['pushes']) for x in d.get('signalPerformance',{}).get('signals',[])])
+          print('BUCKETS',json.dumps(d.get('dashboard',{}).get('liveWeekStats',{}).get('buckets',{}),separators=(',',':'))[:5000])
+          m={x['gameId']:x for x in d.get('movements',[])}
+          for x in d.get('outlooks',{}).get('games',[]):
+            z=m.get(x['gameId'],{}); s=x.get('spread',{}); ml=z.get('moneyline',{})
+            print('GAME',x['awayTeam'],'@',x['homeTeam'],'STATUS',z.get('status'),'ATS',s.get('projectedTeam'),'GRADE',s.get('grade'),'RATE',s.get('coverRate'),'SPREAD',s.get('away'),'FIRST',z.get('firstCapturedAwaySpread'),'NOW',z.get('currentAwaySpread'),'MOVE',z.get('movementMagnitude'),z.get('direction'),'BOOKS',z.get('changedBookmakers'),'ALIGN',z.get('marketAlignment'),'MLMOVE',ml.get('direction'))
           PY
