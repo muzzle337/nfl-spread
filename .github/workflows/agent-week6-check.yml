@@ -1,4 +1,4 @@
-name: Week 8 Post Thursday Parlay Refresh
+name: Week 8 Saturday Final Pool Audit
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -15,6 +15,7 @@ jobs:
           import json
           d=json.load(open('pack.json'))
           print('FRESHNESS',json.dumps(d.get('freshness'),separators=(',',':'))[:1500])
+          print('GENERATED',d.get('generatedAt'))
           print('SIGNALS',[(x['id'],x['wins'],x['losses'],x['pushes']) for x in d.get('signalPerformance',{}).get('signals',[])])
           print('BUCKETS',json.dumps(d.get('dashboard',{}).get('liveWeekStats',{}).get('buckets',{}),separators=(',',':'))[:5000])
           m={x['gameId']:x for x in d.get('movements',[])}
