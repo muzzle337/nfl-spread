@@ -1,39 +1,29 @@
-name: Historical Movement ATS Audit
+name: Week 9 Outright Pool Dashboard Snapshot
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  audit:
+  snapshot:
     runs-on: ubuntu-latest
     steps:
-      - name: Calculate movement results through week 7
+      - name: Read Week 9 production Brain
         run: |
-          for w in 1 2 3 4 5 6 7; do curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week='$w -o w$w.json; done
+          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=9' -o w9.json
           python - <<'PY'
-          import json,collections
-          groups=collections.defaultdict(lambda:[0,0,0,[]])
-          for w in range(1,8):
-            d=json.load(open('w%d.json'%w))
-            res=d.get('results')
-            print('STRUCTURE',w,type(res).__name__,list(res)[:8] if isinstance(res,dict) else '')
-            games=(res or {}).get('games',[]) if isinstance(res,dict) else []
-            rmap={x.get('id',x.get('gameId')):x for x in games}
-            for m in d.get('movements',[]):
-              mag=m.get('movementMagnitude') or 0
-              if mag<=1:continue
-              r=rmap.get(m['gameId'])
-              if not r or r.get('awayScore') is None or r.get('homeScore') is None:continue
-              spread=m.get('closingAwaySpread')
-              if spread is None:spread=m.get('currentAwaySpread')
-              if spread is None:continue
-              v=r['awayScore']-r['homeScore']+spread
-              toward=m.get('direction')
-              cover=('AWAY' if v>0 else 'HOME' if v<0 else 'PUSH')
-              side='AWAY' if toward=='TOWARD_AWAY' else 'HOME' if toward=='TOWARD_HOME' else 'UNKNOWN'
-              outcome='P' if cover=='PUSH' else 'W' if side==cover else 'L'
-              for k in ['ALL','GT1','GT1_'+str(mag),'WEEK_'+str(w)]:
-                g=groups[k];g['WLP'.index(outcome)]+=1;g[3].append((w,m['awayTeam'],m['homeTeam'],mag,toward,spread,r['awayScore'],r['homeScore'],outcome))
-          for k,v in groups.items():print('RECORD',k,v[:3],str(v[3])[:5500])
+          import json
+          d=json.load(open('w9.json'))
+          print('TOPLEVEL',list(d))
+          print('FRESHNESS',json.dumps(d.get('freshness'),separators=(',',':'))[:2500])
+          for k in ['outlooks','focus','movements','dashboard','results','signalPerformance']:
+            x=d.get(k)
+            print('STRUCT',k,'type',type(x).__name__,'keys',list(x)[:20] if isinstance(x,dict) else 'count '+str(len(x)) if isinstance(x,list) else str(x)[:200])
+          print('OUTLOOK SAMPLE',json.dumps(d.get('outlooks',{}).get('games',[])[:2],separators=(',',':'))[:6500])
+          print('MOVE SAMPLE',json.dumps(d.get('movements',[])[:2],separators=(',',':'))[:6000])
+          print('FOCUS',json.dumps(d.get('focus'),separators=(',',':'))[:9500])
+          for g in d.get('outlooks',{}).get('games',[]):
+            print('GAME',json.dumps(g,separators=(',',':'))[:3200])
+          for m in d.get('movements',[]):
+            print('MOVEMENT',json.dumps(m,separators=(',',':'))[:1900])
           PY
