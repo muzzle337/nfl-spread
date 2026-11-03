@@ -1,4 +1,4 @@
-name: Week 9 Outright Pool Dashboard Snapshot
+name: Week 9 Outright Pool Decision Table
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,22 +8,16 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - name: Read Week 9 production Brain
+      - name: Summarize all Week 9 matchups
         run: |
           curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=9' -o w9.json
           python - <<'PY'
           import json
           d=json.load(open('w9.json'))
-          print('TOPLEVEL',list(d))
-          print('FRESHNESS',json.dumps(d.get('freshness'),separators=(',',':'))[:2500])
-          for k in ['outlooks','focus','movements','dashboard','results','signalPerformance']:
-            x=d.get(k)
-            print('STRUCT',k,'type',type(x).__name__,'keys',list(x)[:20] if isinstance(x,dict) else 'count '+str(len(x)) if isinstance(x,list) else str(x)[:200])
-          print('OUTLOOK SAMPLE',json.dumps(d.get('outlooks',{}).get('games',[])[:2],separators=(',',':'))[:6500])
-          print('MOVE SAMPLE',json.dumps(d.get('movements',[])[:2],separators=(',',':'))[:6000])
-          print('FOCUS',json.dumps(d.get('focus'),separators=(',',':'))[:9500])
-          for g in d.get('outlooks',{}).get('games',[]):
-            print('GAME',json.dumps(g,separators=(',',':'))[:3200])
-          for m in d.get('movements',[]):
-            print('MOVEMENT',json.dumps(m,separators=(',',':'))[:1900])
+          for g in d['outlooks']['games']:
+            m=g.get('movement',{})
+            print('POOL',json.dumps({'id':g.get('gameId'),'away':g['awayTeam'],'home':g['homeTeam'],'market':g.get('market'),'spread':g.get('spread',{}).get('away'),'tierPick':g.get('spread',{}).get('projectedTeam'),'tierCover':g.get('spread',{}).get('coverRate'),'move':m.get('movementMagnitude'),'toward':m.get('direction'),'mlDeltaAway':m.get('moneyline',{}).get('probabilityPointsAway'),'hist':[(e.get('team'),e.get('label'),e.get('coverPct'),e.get('games')) for e in g.get('history',{}).get('evidence',[]) if any(t in e.get('label','') for t in ['Division game','Primetime','Home games','Road games'])][:8]},separators=(',',':')))
+          print('FOCUSCOUNT',len(d.get('focus',{}).get('games',[])))
+          for f in d.get('focus',{}).get('games',[]):
+            print('FOCUS',json.dumps(f,separators=(',',':'))[:500])
           PY
