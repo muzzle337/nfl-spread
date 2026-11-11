@@ -1,4 +1,4 @@
-name: Week 9 Outright Pool Decision Table
+name: Week 10 Read-Only Brain Snapshot
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,16 +8,22 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - name: Summarize all Week 9 matchups
+      - name: Fetch stored Week 10 analyst pack
         run: |
-          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=9' -o w9.json
+          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=10' -o week10.json
           python - <<'PY'
           import json
-          d=json.load(open('w9.json'))
-          for g in d['outlooks']['games']:
+          d=json.load(open('week10.json'))
+          print('TOP_LEVEL',list(d))
+          for k in ('dashboard','performance','signalPerformance','freshness','trends'):
+            if k in d: print('SECTION',k,json.dumps(d[k],separators=(',',':'))[:25000])
+          for g in d.get('outlooks',{}).get('games',[]):
             m=g.get('movement',{})
-            print('POOL',json.dumps({'id':g.get('gameId'),'away':g['awayTeam'],'home':g['homeTeam'],'market':g.get('market'),'spread':g.get('spread',{}).get('away'),'tierPick':g.get('spread',{}).get('projectedTeam'),'tierCover':g.get('spread',{}).get('coverRate'),'move':m.get('movementMagnitude'),'toward':m.get('direction'),'mlDeltaAway':m.get('moneyline',{}).get('probabilityPointsAway'),'hist':[(e.get('team'),e.get('label'),e.get('coverPct'),e.get('games')) for e in g.get('history',{}).get('evidence',[]) if any(t in e.get('label','') for t in ['Division game','Primetime','Home games','Road games'])][:8]},separators=(',',':')))
-          print('FOCUSCOUNT',len(d.get('focus',{}).get('games',[])))
-          for f in d.get('focus',{}).get('games',[]):
-            print('FOCUS',json.dumps(f,separators=(',',':'))[:500])
+            print('GAME',json.dumps({'id':g.get('gameId'),'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'market':g.get('market'),'spread':g.get('spread'),'classification':g.get('classification'),'move':m.get('movementMagnitude'),'direction':m.get('direction'),'marketSignal':m.get('marketSignal'),'history':g.get('history',{}).get('evidence',[])[:5],'outlook':g.get('outlook'),'poolEdge':g.get('poolEdge'),'originalThesis':g.get('originalThesis')},separators=(',',':')))
+          for g in d.get('focus',{}).get('games',[]):
+            print('FOCUS',json.dumps(g,separators=(',',':')))
           PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: week10-readonly-brain
+          path: week10.json
