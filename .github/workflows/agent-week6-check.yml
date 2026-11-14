@@ -1,4 +1,4 @@
-name: Week 10 Read-Only Brain Snapshot
+name: Week 10 Saturday Read-Only Brain Snapshot
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -14,9 +14,11 @@ jobs:
           python - <<'PY'
           import json
           d=json.load(open('week10.json'))
-          print('TOP_LEVEL',list(d))
-          for k in ('dashboard','performance','signalPerformance','freshness','trends'):
+          print('TOP_LEVEL',list(d)); print('GENERATED',d.get('generatedAt')); print('INTERPRETATION',json.dumps(d.get('interpretation',{}),separators=(',',':')))
+          for k in ('freshness','results','movements','tierContributors','signalPerformance'):
             if k in d: print('SECTION',k,json.dumps(d[k],separators=(',',':'))[:25000])
+          print('DASHBOARD_BUCKETS',json.dumps(d.get('dashboard',{}).get('openingWeekStats',{}).get('buckets',{}),separators=(',',':')))
+          print('DASHBOARD_GAMES',json.dumps([{'away':g.get('awayTeam'),'home':g.get('homeTeam'),'status':g.get('status'),'awaySpread':g.get('medianAwaySpread'),'pick':g.get('projectedTeam'),'rate':g.get('projectedCoverRate'),'grade':g.get('grade'),'bookmakers':g.get('bookmakerCount'),'record':g.get('currentSeasonStats'),'moneyline':g.get('moneyline',{}).get('awayWinProbability'),'final':g.get('final')} for g in d.get('dashboard',{}).get('games',[])],separators=(',',':')))
           for g in d.get('outlooks',{}).get('games',[]):
             m=g.get('movement',{})
             print('GAME',json.dumps({'id':g.get('gameId'),'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'market':g.get('market'),'spread':g.get('spread'),'classification':g.get('classification'),'move':m.get('movementMagnitude'),'direction':m.get('direction'),'marketSignal':m.get('marketSignal'),'history':g.get('history',{}).get('evidence',[])[:5],'outlook':g.get('outlook'),'poolEdge':g.get('poolEdge'),'originalThesis':g.get('originalThesis')},separators=(',',':')))
