@@ -1,31 +1,25 @@
-name: Week 10 Saturday Read-Only Brain Snapshot
+name: Recent Game Results Read-Only Audit
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  snapshot:
+  audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch stored Week 10 analyst pack
+      - name: Read completed weeks 6-9 from production cache
         run: |
-          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=10' -o week10.json
           python - <<'PY'
-          import json
-          d=json.load(open('week10.json'))
-          print('TOP_LEVEL',list(d)); print('GENERATED',d.get('generatedAt')); print('INTERPRETATION',json.dumps(d.get('interpretation',{}),separators=(',',':')))
-          for k in ('freshness','results','movements','tierContributors','signalPerformance'):
-            if k in d: print('SECTION',k,json.dumps(d[k],separators=(',',':'))[:25000])
-          print('DASHBOARD_BUCKETS',json.dumps(d.get('dashboard',{}).get('openingWeekStats',{}).get('buckets',{}),separators=(',',':')))
-          print('DASHBOARD_GAMES',json.dumps([{'away':g.get('awayTeam'),'home':g.get('homeTeam'),'status':g.get('status'),'awaySpread':g.get('medianAwaySpread'),'pick':g.get('projectedTeam'),'rate':g.get('projectedCoverRate'),'grade':g.get('grade'),'bookmakers':g.get('bookmakerCount'),'record':g.get('currentSeasonStats'),'moneyline':g.get('moneyline',{}).get('awayWinProbability'),'final':g.get('final')} for g in d.get('dashboard',{}).get('games',[])],separators=(',',':')))
-          for g in d.get('outlooks',{}).get('games',[]):
-            m=g.get('movement',{})
-            print('GAME',json.dumps({'id':g.get('gameId'),'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'market':g.get('market'),'spread':g.get('spread'),'classification':g.get('classification'),'move':m.get('movementMagnitude'),'direction':m.get('direction'),'marketSignal':m.get('marketSignal'),'history':g.get('history',{}).get('evidence',[])[:5],'outlook':g.get('outlook'),'poolEdge':g.get('poolEdge'),'originalThesis':g.get('originalThesis')},separators=(',',':')))
-          for g in d.get('focus',{}).get('games',[]):
-            print('FOCUS',json.dumps(g,separators=(',',':')))
+          import json,urllib.request
+          base="https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week="
+          for week in range(6,10):
+            try:
+              with urllib.request.urlopen(base+str(week),timeout=25) as f: d=json.load(f)
+              print("WEEK",week,"GENERATED",d.get("generatedAt"),"RESULTS",d.get("results",{}).get("completedGames"))
+              for g in d.get("results",{}).get("games",[]):
+                print("RESULT",json.dumps({"week":week,"away":g.get("awayTeam"),"home":g.get("homeTeam"),"awayScore":g.get("awayScore"),"homeScore":g.get("homeScore"),"status":g.get("status"),"final":g.get("final")},separators=(',',':')))
+              for g in d.get("dashboard",{}).get("games",[]):
+                if g.get("final"): print("DASHFINAL",week,g.get("awayTeam"),g.get("homeTeam"),json.dumps(g.get("final")))
+            except Exception as e: print("ERROR",week,repr(e))
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: week10-readonly-brain
-          path: week10.json
