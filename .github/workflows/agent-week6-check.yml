@@ -1,4 +1,4 @@
-name: Opponent-Adjusted Scoring Verification
+name: Upcoming Matchup Opponent Difficulty
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,41 +8,13 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch existing production results without refresh
+      - name: Read 2026 Week 10 team records
         run: |
-          for w in 1 2 3 4 5 6 7 8 9; do
-            curl -fsS --retry 2 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_ERROR $w"
-          done
+          curl -fsS --retry 2 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=10' -o week10.json
           python - <<'PY'
-          import json,os,collections
-          games=[]
-          for w in range(1,10):
-            p=f'w{w}.json'
-            if not os.path.isfile(p): continue
-            d=json.load(open(p)); gs=d.get('results',{}).get('games',[])
-            print('WEEK',w,'completed',sum(x.get('final')==True for x in gs),'count',len(gs))
-            for g in gs:
-              if g.get('final')==True and isinstance(g.get('awayScore'),int) and isinstance(g.get('homeScore'),int):
-                games.append({'week':w,'away':g['awayTeam'],'home':g['homeTeam'],'as':g['awayScore'],'hs':g['homeScore']})
-          teams=['New England Patriots','Detroit Lions','Kansas City Chiefs','Atlanta Falcons','Houston Texans','Cleveland Browns','Minnesota Vikings','Green Bay Packers','Miami Dolphins','Indianapolis Colts','Carolina Panthers','New Orleans Saints','Buffalo Bills','New York Jets','Jacksonville Jaguars','Tennessee Titans','Los Angeles Rams','Arizona Cardinals','Seattle Seahawks','Las Vegas Raiders','San Francisco 49ers','Dallas Cowboys','Pittsburgh Steelers','Cincinnati Bengals','Los Angeles Chargers','Baltimore Ravens']
-          def history(team,before):
-            out=[]
-            for g in games:
-              if g['week']>=before:continue
-              if g['away']==team:out.append((g['week'],g['as'],g['hs'],g['home'],'away'))
-              elif g['home']==team:out.append((g['week'],g['hs'],g['as'],g['away'],'home'))
-            return sorted(out)
-          for team in teams:
-            last=history(team,10)[-3:]
-            analysis=[]
-            for w,pf,pa,op,loc in last:
-              oh=history(op,w)
-              if len(oh)>=2:
-                opp_def=sum(x[2] for x in oh)/len(oh)
-                opp_off=sum(x[1] for x in oh)/len(oh)
-                analysis.append({'w':w,'op':op,'loc':loc,'pf':pf,'pa':pa,'oppGames':len(oh),'oppDefPre':round(opp_def,1),'offVsExpected':round(pf-opp_def,1),'oppOffPre':round(opp_off,1),'defVsExpected':round(pa-opp_off,1)})
-              else: analysis.append({'w':w,'op':op,'loc':loc,'pf':pf,'pa':pa,'oppGames':len(oh),'missing':True})
-            valid=[x for x in analysis if not x.get('missing')]
-            summary={'name':team,'last3':analysis,'last3PF':round(sum(x['pf'] for x in analysis)/len(analysis),1) if analysis else None,'last3PA':round(sum(x['pa'] for x in analysis)/len(analysis),1) if analysis else None,'adjOff':round(sum(x['offVsExpected'] for x in valid)/len(valid),1) if valid else None,'adjDef':round(sum(x['defVsExpected'] for x in valid)/len(valid),1) if valid else None}
-            print('TEAM',json.dumps(summary,separators=(',',':')))
+          import json
+          d=json.load(open('week10.json'))
+          for g in d.get('dashboard',{}).get('games',[]):
+            a=g.get('teamRecords',{}).get('away',{});h=g.get('teamRecords',{}).get('home',{})
+            print('MATCH',json.dumps({'away':g.get('awayTeam'),'home':g.get('homeTeam'),'awayRecord':a,'homeRecord':h,'status':g.get('status')},separators=(',',':')))
           PY
