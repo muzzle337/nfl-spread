@@ -8,18 +8,18 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Read completed weeks 6-9 from production cache
+      - name: Read historical result packs via production API
         run: |
+          for w in 6 7 8 9; do
+            curl -fsS --retry 2 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_ERROR $w"
+          done
           python - <<'PY'
-          import json,urllib.request
-          base="https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week="
+          import json,os
           for week in range(6,10):
-            try:
-              with urllib.request.urlopen(base+str(week),timeout=25) as f: d=json.load(f)
-              print("WEEK",week,"GENERATED",d.get("generatedAt"),"RESULTS",d.get("results",{}).get("completedGames"))
-              for g in d.get("results",{}).get("games",[]):
-                print("RESULT",json.dumps({"week":week,"away":g.get("awayTeam"),"home":g.get("homeTeam"),"awayScore":g.get("awayScore"),"homeScore":g.get("homeScore"),"status":g.get("status"),"final":g.get("final")},separators=(',',':')))
-              for g in d.get("dashboard",{}).get("games",[]):
-                if g.get("final"): print("DASHFINAL",week,g.get("awayTeam"),g.get("homeTeam"),json.dumps(g.get("final")))
-            except Exception as e: print("ERROR",week,repr(e))
+            path=f'w{week}.json'
+            if not os.path.exists(path): continue
+            d=json.load(open(path))
+            print('WEEK',week,'GENERATED',d.get('generatedAt'),'RESULTS',d.get('results',{}).get('completedGames'))
+            for g in d.get('results',{}).get('games',[]):
+              print('RESULT',json.dumps({'week':week,'away':g.get('awayTeam'),'home':g.get('homeTeam'),'awayScore':g.get('awayScore'),'homeScore':g.get('homeScore'),'status':g.get('status'),'final':g.get('final')},separators=(',',':')))
           PY
