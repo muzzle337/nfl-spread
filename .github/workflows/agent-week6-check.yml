@@ -1,4 +1,4 @@
-name: Live Score Clock Possession Snapshot
+name: Live Edge Late Games Snapshot
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,18 +8,33 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     steps:
-      - name: Read ESPN live scoreboard with possession
+      - name: Capture live scoreboard box scores and drives
         run: |
           date -u +"CAPTURE_UTC %Y-%m-%dT%H:%M:%SZ"
-          curl -LfsS --retry 1 --max-time 12 -H 'User-Agent: Mozilla/5.0' 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o live.json
+          curl -LfsS --retry 1 --max-time 12 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o live.json
           python - <<'PY'
           import json
           d=json.load(open('live.json'))
-          print('CAPTURE_COUNT',len(d.get('events',[])))
           for e in d.get('events',[]):
-            c=e['competitions'][0]
-            cs=c.get('competitors',[])
-            teams=[{'name':t.get('team',{}).get('abbreviation'),'score':t.get('score'),'homeAway':t.get('homeAway'),'hasPossession':t.get('hasPossession'),'winner':t.get('winner')} for t in cs]
-            s=e.get('status',{})
-            print('LIVE',json.dumps({'name':e.get('name'),'eventId':e.get('id'),'state':s.get('type',{}).get('state'),'detail':s.get('type',{}).get('detail'),'period':s.get('period'),'clock':s.get('displayClock'),'teams':teams,'situation':c.get('situation'),'lastPlay':c.get('details')},separators=(',',':'),default=str)[:1500])
+            c=e['competitions'][0];s=e.get('status',{})
+            teams=[{'name':t['team']['abbreviation'],'score':t.get('score'),'side':t.get('homeAway')} for t in c['competitors']]
+            sit=c.get('situation') or {}
+            print('GAME',json.dumps({'name':e.get('name'),'id':e.get('id'),'state':s.get('type',{}).get('state'),'detail':s.get('type',{}).get('detail'),'teams':teams,'possessionId':sit.get('possession'),'down':sit.get('downDistanceText'),'lastPlay':(sit.get('lastPlay') or {}).get('text'),'espnLiveProb':(sit.get('lastPlay') or {}).get('probability'),'odds':c.get('odds'),'leaders':c.get('leaders')},separators=(',',':'))[:2800])
+          PY
+          for id in 401873074 401873069 401873075 401873068 401873072; do
+            curl -LfsS --retry 1 --max-time 14 "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=$id" -o "$id.json" || continue
+          done
+          python - <<'PY'
+          import json,os
+          for id in ['401873074','401873069','401873075','401873068','401873072']:
+            if not os.path.isfile(id+'.json'):continue
+            d=json.load(open(id+'.json'))
+            b=d.get('boxscore',{})
+            teams=[]
+            for t in b.get('teams',[]):
+              st=t.get('statistics',[])
+              teams.append({'name':t.get('team',{}).get('abbreviation'),'stats':{q.get('name'):q.get('displayValue') for q in st if q.get('name') in ('totalYards','yardsPerPlay','turnovers','fumblesLost','interceptions','thirdDownEff','possessionTime','totalPenaltiesYards','netPassingYards','rushingYards','firstDowns')}})
+            drives=d.get('drives') or {}
+            curr=drives.get('current')
+            print('BOX',json.dumps({'id':id,'teams':teams,'currentDrive':{'team':curr.get('team',{}).get('abbreviation'),'description':curr.get('description'),'plays':len(curr.get('plays',[]))} if isinstance(curr,dict) else None},separators=(',',':'))[:2000])
           PY
