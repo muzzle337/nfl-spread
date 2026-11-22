@@ -1,50 +1,34 @@
-name: Week 11 Updated Morning Tier Audit
+name: Live Edge Jets Chargers One-Game Check
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  audit:
+  snapshot:
     runs-on: ubuntu-latest
     steps:
-      - name: Read-only production category trend audit
+      - name: Capture current Jets Chargers game state
         run: |
-          date -u "+CAPTURE_UTC %Y-%m-%dT%H:%M:%SZ"
-          for w in 8 9 10 11; do
-            curl -fsS --max-time 25 --retry 1 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_FAILED $w"
-          done
+          date -u "+SNAPSHOT_UTC %Y-%m-%dT%H:%M:%SZ"
+          curl -fsSL --max-time 14 "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401873074" -o game.json
           python - <<'PY'
-          import json,os,collections
-          packs={w:json.load(open('w%d.json'%w)) for w in (8,9,10,11) if os.path.exists('w%d.json'%w)}
-          for w,p in packs.items():
-            r=p.get('results') or {};d=p.get('dashboard') or {}
-            fr=p.get('freshness') or {}
-            print('WEEK_META',json.dumps({'week':w,'generated':p.get('generatedAt'),'total':r.get('totalGames'),'completed':r.get('completedGames'),'currentSeasonGamesConsidered':d.get('currentSeasonGamesConsidered'),'statsThroughWeek':d.get('statsThroughWeek'),'freshness':{k:{'status':v.get('status'),'updatedAt':v.get('updatedAt')} for k,v in fr.get('sources',{}).items()},'pulseThrough':(d.get('seasonPulse') or {}).get('throughWeek')},separators=(',',':')))
-          d=packs[11]
-          m=(d.get('dashboard',{}).get('seasonPulse') or {}).get('momentum',{})
-          for k,a in m.items():
-            r=[{'week':v['week'],'wins':v['weekly']['wins'],'losses':v['weekly']['losses'],'pushes':v['weekly']['pushes'],'n':v['weekly']['decisions'],'rate':v['weekly']['coverRate']} for v in a if v['week']>=8]
-            print('TIER_TREND',json.dumps({'tier':k,'weeks':r},separators=(',',':')))
-          sp=d.get('signalPerformance') or {}
-          for s in sp.get('signals',[]):
-            print('SIGNAL',json.dumps({'id':s['id'],'wins':s.get('wins'),'losses':s.get('losses'),'pushes':s.get('pushes'),'rate':s.get('rate'),'byWeek':[x for x in s.get('weeks',[]) if x.get('week',0)>=8]},separators=(',',':')))
-          for w,p in packs.items():
-            r={g['id']:g for g in (p.get('results') or {}).get('games',[])}
-            gs=(p.get('outlooks') or {}).get('games',[])
-            for g in gs:
-              rec=r.get(g.get('gameId')) or {}
-              a,h=g.get('awayTeam'),g.get('homeTeam');sp=g.get('spread') or {}
-              cl=g.get('classification') or {}
-              move=g.get('movement') or {}
-              final=rec.get('final',False)
-              ascore,hscore=rec.get('awayScore'),rec.get('homeScore')
-              # use game-specific spread from weekly pack, may be postgame/current; record state.
-              home_spread=sp.get('home')
-              away_spread=sp.get('away')
-              if final and isinstance(ascore,int) and isinstance(hscore,int) and isinstance(away_spread,(int,float)):
-                mar=(ascore-hscore)+away_spread
-                ats='AWAY' if mar>0 else 'HOME' if mar<0 else 'PUSH'
-              else:ats=None
-              print('GAME',json.dumps({'week':w,'id':g.get('gameId'),'kickoff':g.get('kickoffAt'),'away':a,'home':h,'score':[ascore,hscore] if final else None,'result':rec.get('status'),'class':cl,'line':{'away':away_spread,'home':home_spread,'first':move.get('firstCapturedAwaySpread'),'closing':move.get('closingAwaySpread'),'current':move.get('currentAwaySpread'),'captured':move.get('lastCapturedAt')},'ats':ats,'brain':{'projectedTeam':sp.get('projectedTeam'),'rate':sp.get('coverRate'),'grade':sp.get('grade'),'sampleSize':sp.get('sampleSize'),'status':sp.get('status')},'openingSignal':g.get('openingSignal'),'currentSignal':g.get('currentSignal'),'signalChange':g.get('signalChange')},separators=(',',':'))[:2100])
+          import json
+          d=json.load(open('game.json'))
+          h=d.get('header',{}); c=h.get('competitions',[{}])[0]
+          print('STATE',json.dumps({'status':c.get('status'),'competitors':[{'name':x.get('team',{}).get('abbreviation'),'score':x.get('score'),'homeAway':x.get('homeAway')} for x in c.get('competitors',[])]},separators=(',',':'))[:1600])
+          for t in d.get('boxscore',{}).get('teams',[]):
+            print('TEAM',json.dumps({'team':t.get('team',{}).get('abbreviation'),'stats':{q.get('name'):q.get('displayValue') for q in t.get('statistics',[])}},separators=(',',':'))[:3300])
+          dr=d.get('drives') or {}
+          for x in (dr.get('current'),):
+            if isinstance(x,dict):print('DRIVE',json.dumps({'team':x.get('team'),'description':x.get('description'),'plays':x.get('plays',[])[-2:]},separators=(',',':'))[:1400])
+          print('KEYS',list(d.keys()))
+          PY
+          curl -fsSL --max-time 14 "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50" -o scores.json
+          python - <<'PY'
+          import json
+          d=json.load(open('scores.json'))
+          e=next((x for x in d.get('events',[]) if x.get('id')=='401873074'),{})
+          c=(e.get('competitions') or [{}])[0];s=e.get('status',{});sit=c.get('situation') or {}
+          print('LIVE',json.dumps({'detail':s.get('type',{}).get('detail'),'period':s.get('period'),'clock':s.get('displayClock'),'teams':[{'name':x.get('team',{}).get('abbreviation'),'score':x.get('score')} for x in c.get('competitors',[])],'possessionId':sit.get('possession'),'down':sit.get('downDistanceText'),'lastPlay':(sit.get('lastPlay') or {}).get('text'),'wp':(sit.get('lastPlay') or {}).get('probability')},separators=(',',':')))
           PY
