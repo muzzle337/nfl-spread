@@ -1,39 +1,25 @@
-name: Week 11 Sunday Pregame Brain Audit
+name: Live Score Clock Possession Snapshot
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  audit:
+  capture:
     runs-on: ubuntu-latest
     steps:
-      - name: Capture production checkpoints and analyze matchups
+      - name: Read ESPN live scoreboard with possession
         run: |
-          for w in 8 9 10 11; do
-            curl -fsS --max-time 25 --retry 1 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_FAIL $w"
-          done
+          date -u +"CAPTURE_UTC %Y-%m-%dT%H:%M:%SZ"
+          curl -LfsS --retry 1 --max-time 12 -H 'User-Agent: Mozilla/5.0' 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o live.json
           python - <<'PY'
-          import json,os,collections
-          ds={w:json.load(open('w%d.json'%w)) for w in (8,9,10,11) if os.path.isfile('w%d.json'%w)}
-          for w,d in ds.items():
-            print('META',json.dumps({'week':w,'generated':d.get('generatedAt'),'fresh':d.get('freshness'),'results':{k:v for k,v in d.get('results',{}).items() if k!='games'}},separators=(',',':'))[:4500])
-          d=ds[11];gs=d.get('outlooks',{}).get('games',[]);f={x['gameId']:x for x in d.get('focus',{}).get('games',[])}
-          prior={}
-          for w in (8,9,10):
-            for g in ds[w].get('results',{}).get('games',[]):
-              if g.get('final') and isinstance(g.get('awayScore'),int):
-                for name,pf,pa,opp,site in [(g['awayTeam'],g['awayScore'],g['homeScore'],g['homeTeam'],'A'),(g['homeTeam'],g['homeScore'],g['awayScore'],g['awayTeam'],'H')]:
-                  prior.setdefault(name,[]).append({'w':w,'op':opp,'site':site,'pf':pf,'pa':pa})
-          def trend(team):
-            a=sorted(prior.get(team,[]),key=lambda x:x['w'])
-            return {'games':a,'avgPF':round(sum(x['pf'] for x in a)/len(a),1) if a else None,'avgPA':round(sum(x['pa'] for x in a)/len(a),1) if a else None}
-          for g in gs:
-            gameid=g.get('gameId');m=g.get('movement') or {};p=g.get('spread') or {};ml=g.get('market') or {}
-            print('MATCH',json.dumps({'id':gameid,'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'spread':p,'market':ml,'movement':{'first':m.get('firstCapturedAwaySpread'),'current':m.get('currentAwaySpread'),'direction':m.get('direction'),'points':m.get('movementMagnitude'),'alignment':m.get('marketAlignment'),'snapshots':m.get('snapshotCount'),'last':m.get('lastCapturedAt'),'moneyline':m.get('moneyline')},'focus':f.get(gameid),'awayTrend':trend(g.get('awayTeam')),'homeTrend':trend(g.get('homeTeam')),'history':g.get('history'),'context':g.get('context'),'signalChange':g.get('signalChange'),'outlook':g.get('outlook')},separators=(',',':'))[:9000])
-          sp=d.get('signalPerformance',{})
-          print('SIGNALS',json.dumps({'snapshotCount':sp.get('snapshotCount'),'signals':[{'name':x.get('id'),'wins':x.get('wins'),'losses':x.get('losses'),'rate':x.get('rate'),'weeks':[q for q in x.get('weeks',[]) if q.get('week') in (8,9,10)]} for x in sp.get('signals',[])]},separators=(',',':'))[:6500])
-          for tier,weekRows in d.get('dashboard',{}).get('seasonPulse',{}).get('momentum',{}).items():
-            print('TIER',json.dumps({'tier':tier,'weeks':[{'week':x['week'],**x['weekly']} for x in weekRows if x['week'] in (8,9,10)]},separators=(',',':'))[:1500])
-          print('RESULTS10',json.dumps(dS if (dS:=[{'a':g.get('awayTeam'),'h':g.get('homeTeam'),'as':g.get('awayScore'),'hs':g.get('homeScore')} for g in ds[10].get('results',{}).get('games',[])]) else [],separators=(',',':')))
+          import json
+          d=json.load(open('live.json'))
+          print('CAPTURE_COUNT',len(d.get('events',[])))
+          for e in d.get('events',[]):
+            c=e['competitions'][0]
+            cs=c.get('competitors',[])
+            teams=[{'name':t.get('team',{}).get('abbreviation'),'score':t.get('score'),'homeAway':t.get('homeAway'),'hasPossession':t.get('hasPossession'),'winner':t.get('winner')} for t in cs]
+            s=e.get('status',{})
+            print('LIVE',json.dumps({'name':e.get('name'),'eventId':e.get('id'),'state':s.get('type',{}).get('state'),'detail':s.get('type',{}).get('detail'),'period':s.get('period'),'clock':s.get('displayClock'),'teams':teams,'situation':c.get('situation'),'lastPlay':c.get('details')},separators=(',',':'),default=str)[:1500])
           PY
