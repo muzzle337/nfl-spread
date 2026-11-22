@@ -1,4 +1,4 @@
-name: Week 11 Three-Week Trend Verification
+name: Week 11 Sunday Pregame Brain Audit
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,50 +8,32 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Read data and calculate weekly momentum
+      - name: Capture production checkpoints and analyze matchups
         run: |
           for w in 8 9 10 11; do
-            curl -fsS --max-time 30 --retry 2 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_ERROR $w"
+            curl -fsS --max-time 25 --retry 1 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_FAIL $w"
           done
           python - <<'PY'
-          import json,os
+          import json,os,collections
           ds={w:json.load(open('w%d.json'%w)) for w in (8,9,10,11) if os.path.isfile('w%d.json'%w)}
-          if 11 in ds:
-            d=ds[11]
-            pulse=d.get('dashboard',{}).get('seasonPulse',{})
-            for tier,rows in pulse.get('momentum',{}).items():
-              r=[{'w':v['week'],'W':v['weekly']['wins'],'L':v['weekly']['losses'],'P':v['weekly']['pushes'],'pct':v['weekly']['coverRate'],'n':v['weekly']['decisions']} for v in rows if v['week'] in (7,8,9,10)]
-              print('TIER_TREND',tier,json.dumps(r,separators=(',',':')))
-            for g in d.get('outlooks',{}).get('games',[]):
-              h=g.get('history',[])
-              m=g.get('move',{})
-              print('W11_GAME',json.dumps({'away':g.get('away'),'home':g.get('home'),'awaySpread':g.get('spread',{}).get('away'),'pick':g.get('spread',{}).get('projectedTeam'),'ML':g.get('market',{}).get('awayWinPct'),'move':m.get('direction'),'movePts':m.get('movementMagnitude'),'history':h[:5]},separators=(',',':'))[:2400])
-          allgames={}
+          for w,d in ds.items():
+            print('META',json.dumps({'week':w,'generated':d.get('generatedAt'),'fresh':d.get('freshness'),'results':{k:v for k,v in d.get('results',{}).items() if k!='games'}},separators=(',',':'))[:4500])
+          d=ds[11];gs=d.get('outlooks',{}).get('games',[]);f={x['gameId']:x for x in d.get('focus',{}).get('games',[])}
+          prior={}
           for w in (8,9,10):
-            if w not in ds:continue
-            allgames[w]=ds[w].get('results',{}).get('games',[])
-          from collections import defaultdict
-          per=defaultdict(list)
-          for w,gs in allgames.items():
-            for g in gs:
-              if g.get('status')!='COMPLETED':continue
-              a,h=g['awayTeam'],g['homeTeam'];s1=g['awayScore'];s2=g['homeScore']
-              per[a].append({'w':w,'opp':h,'site':'A','pf':s1,'pa':s2,'diff':s1-s2})
-              per[h].append({'w':w,'opp':a,'site':'H','pf':s2,'pa':s1,'diff':s2-s1})
-          for team,rows in sorted(per.items()):
-            print('TEAM3',json.dumps({'team':team,'games':sorted(rows,key=lambda r:r['w']),'avgFor':round(sum(x['pf'] for x in rows)/len(rows),1),'avgAgainst':round(sum(x['pa'] for x in rows)/len(rows),1)},separators=(',',':')))
-          if 10 in ds:
-            d=ds[10]
-            scores={g['id']:g for g in d.get('results',{}).get('games',[])}
-            for g in d.get('outlooks',{}).get('games',[]):
-              rec=scores.get(g.get('id'))
-              if not rec:continue
-              p=g.get('spread',{}); side=p.get('projectedTeam')
-              m=g.get('market',{})
-              if side and isinstance(rec.get('awayScore'),int):
-                isaway=side==g.get('away')
-                pts=rec['awayScore'] if isaway else rec['homeScore']
-                opp=rec['homeScore'] if isaway else rec['awayScore']
-                line=p.get('away' if isaway else 'home')
-                print('W10_ATS',json.dumps({'game':g.get('id'),'pick':side,'line':line,'margin':pts-opp,'coverMargin':round(pts-opp+line,1),'grade':p.get('grade'),'tierRate':p.get('coverRate')},separators=(',',':')))
+            for g in ds[w].get('results',{}).get('games',[]):
+              if g.get('final') and isinstance(g.get('awayScore'),int):
+                for name,pf,pa,opp,site in [(g['awayTeam'],g['awayScore'],g['homeScore'],g['homeTeam'],'A'),(g['homeTeam'],g['homeScore'],g['awayScore'],g['awayTeam'],'H')]:
+                  prior.setdefault(name,[]).append({'w':w,'op':opp,'site':site,'pf':pf,'pa':pa})
+          def trend(team):
+            a=sorted(prior.get(team,[]),key=lambda x:x['w'])
+            return {'games':a,'avgPF':round(sum(x['pf'] for x in a)/len(a),1) if a else None,'avgPA':round(sum(x['pa'] for x in a)/len(a),1) if a else None}
+          for g in gs:
+            gameid=g.get('gameId');m=g.get('movement') or {};p=g.get('spread') or {};ml=g.get('market') or {}
+            print('MATCH',json.dumps({'id':gameid,'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'spread':p,'market':ml,'movement':{'first':m.get('firstCapturedAwaySpread'),'current':m.get('currentAwaySpread'),'direction':m.get('direction'),'points':m.get('movementMagnitude'),'alignment':m.get('marketAlignment'),'snapshots':m.get('snapshotCount'),'last':m.get('lastCapturedAt'),'moneyline':m.get('moneyline')},'focus':f.get(gameid),'awayTrend':trend(g.get('awayTeam')),'homeTrend':trend(g.get('homeTeam')),'history':g.get('history'),'context':g.get('context'),'signalChange':g.get('signalChange'),'outlook':g.get('outlook')},separators=(',',':'))[:9000])
+          sp=d.get('signalPerformance',{})
+          print('SIGNALS',json.dumps({'snapshotCount':sp.get('snapshotCount'),'signals':[{'name':x.get('id'),'wins':x.get('wins'),'losses':x.get('losses'),'rate':x.get('rate'),'weeks':[q for q in x.get('weeks',[]) if q.get('week') in (8,9,10)]} for x in sp.get('signals',[])]},separators=(',',':'))[:6500])
+          for tier,weekRows in d.get('dashboard',{}).get('seasonPulse',{}).get('momentum',{}).items():
+            print('TIER',json.dumps({'tier':tier,'weeks':[{'week':x['week'],**x['weekly']} for x in weekRows if x['week'] in (8,9,10)]},separators=(',',':'))[:1500])
+          print('RESULTS10',json.dumps(dS if (dS:=[{'a':g.get('awayTeam'),'h':g.get('homeTeam'),'as':g.get('awayScore'),'hs':g.get('homeScore')} for g in ds[10].get('results',{}).get('games',[])]) else [],separators=(',',':')))
           PY
