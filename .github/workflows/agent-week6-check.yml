@@ -1,4 +1,4 @@
-name: Live Edge Three Games 3pm PT
+name: Live Combo Game Check
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,27 +8,15 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Live ESPN and production read-only
+      - name: ESPN live state
         run: |
           date -u "+SNAPSHOT_UTC %Y-%m-%dT%H:%M:%SZ"
-          curl -fsSL --retry 1 --max-time 14 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o scores.json
-          for id in 401873074 401873069 401873075; do curl -fsSL --retry 1 --max-time 14 "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=$id" -o "$id.json"; done
-          curl -fsSL --retry 1 --max-time 24 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=11' -o pack.json
+          curl -fsSL --max-time 15 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o scores.json
           python - <<'PY'
           import json
-          s=json.load(open('scores.json'));p=json.load(open('pack.json'))
-          print('META',json.dumps({'generated':p.get('generatedAt'),'freshness':{k:dict(updatedAt=v.get('updatedAt'),status=v.get('status')) for k,v in p.get('freshness',{}).get('sources',{}).items()}},separators=(',',':')))
-          for id in ['401873074','401873069','401873075']:
-            e=next((x for x in s.get('events',[]) if x.get('id')==id),{})
-            z=(e.get('competitions') or [{}])[0];t=e.get('status',{});sit=z.get('situation') or {};d=json.load(open(id+'.json'))
-            teams=z.get('competitors',[])
-            print('GAME',json.dumps({'id':id,'status':t.get('type',{}).get('detail'),'clock':t.get('displayClock'),'teams':[{'name':x.get('team',{}).get('abbreviation'),'score':x.get('score'),'homeAway':x.get('homeAway')} for x in teams],'possessionId':sit.get('possession'),'down':sit.get('downDistanceText'),'lastPlay':(sit.get('lastPlay') or {}).get('text'),'winProb':(sit.get('lastPlay') or {}).get('probability'),'odds':[{k:o.get(k) for k in ('details','overUnder')} for o in z.get('odds',[]) or []]},separators=(',',':')))
-            for team in d.get('boxscore',{}).get('teams',[]):
-              st={v.get('name'):v.get('displayValue') for v in team.get('statistics',[])}
-              print('TEAM',json.dumps({'id':id,'team':team.get('team',{}).get('abbreviation'),'stats':{k:st.get(k) for k in ('totalYards','yardsPerPlay','firstDowns','thirdDownEff','fourthDownEff','rushingYards','yardsPerRushAttempt','netPassingYards','completionAttempts','interceptions','sacksYardsLost','redZoneAttempts','turnovers','totalPenaltiesYards','possessionTime')}},separators=(',',':')))
-            for dr in (d.get('drives',{}) or {}).get('previous',[])[-7:]:
-              print('DRIVE',json.dumps({'id':id,'team':dr.get('team',{}).get('abbreviation'),'result':dr.get('displayResult'),'description':dr.get('description'),'start':dr.get('start',{}).get('text'),'end':dr.get('end',{}).get('text'),'last':(dr.get('plays') or [{}])[-1].get('text')},separators=(',',':'))[:1100])
-            home=next((x.get('team',{}).get('displayName') for x in teams if x.get('homeAway')=='home'),None)
-            g=next((x for x in p.get('outlooks',{}).get('games',[]) if x.get('homeTeam')==home),None)
-            if g: print('BRAIN',json.dumps({'id':id,'gameId':g.get('gameId'),'spread':g.get('spread'),'first':(g.get('movement') or {}).get('firstCapturedAwaySpread'),'last':(g.get('movement') or {}).get('currentAwaySpread'),'openingSignal':g.get('openingSignal'),'currentSignal':g.get('currentSignal'),'evidence':(g.get('history') or {}).get('evidence'),'contextQuality':(g.get('context') or {}).get('quality')},separators=(',',':'))[:6000])
+          d=json.load(open('scores.json'))
+          for id in ['401873074','401873075','401873069']:
+            e=next(x for x in d.get('events',[]) if x.get('id')==id)
+            c=e['competitions'][0];s=e.get('status',{});sit=c.get('situation') or {}
+            print('LIVE',json.dumps({'id':id,'state':s.get('type',{}).get('detail'),'score':[{'team':t['team']['abbreviation'],'score':t['score']} for t in c['competitors']],'down':sit.get('downDistanceText'),'possession':sit.get('possession'),'lastPlay':(sit.get('lastPlay') or {}).get('text'),'wp':(sit.get('lastPlay') or {}).get('probability')},separators=(',',':')))
           PY
