@@ -1,4 +1,4 @@
-name: Live Edge Game 2 Jaguars Giants
+name: Live Edge Game 3 Raiders Broncos
 on:
   push:
     branches: [agent-week6-check-20261017]
@@ -8,31 +8,33 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - name: Capture live game and production Brain
+      - name: Capture live state, Brain and tier history
         run: |
           date -u "+SNAPSHOT_UTC %Y-%m-%dT%H:%M:%SZ"
-          curl -fsSL --retry 1 --max-time 14 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401873069' -o game.json
+          curl -fsSL --retry 1 --max-time 14 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401873075' -o game.json
           curl -fsSL --retry 1 --max-time 14 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261122&limit=50' -o scores.json
           curl -fsSL --retry 1 --max-time 25 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=11' -o pack.json
           python - <<'PY'
           import json
-          d=json.load(open('game.json')); h=d.get('header',{});c=(h.get('competitions') or [{}])[0]
+          d=json.load(open('game.json'))
+          h=d.get('header',{});c=(h.get('competitions') or [{}])[0]
           print('STATE',json.dumps({'status':c.get('status'),'teams':[{'name':x.get('team',{}).get('abbreviation'),'score':x.get('score'),'homeAway':x.get('homeAway')} for x in c.get('competitors',[])]},separators=(',',':')))
           for t in d.get('boxscore',{}).get('teams',[]):
             print('TEAM',json.dumps({'team':t.get('team',{}).get('abbreviation'),'stats':{q.get('name'):q.get('displayValue') for q in t.get('statistics',[])}},separators=(',',':')))
           dr=d.get('drives') or {}
           cur=dr.get('current')
-          if isinstance(cur,dict):print('DRIVE',json.dumps({'team':cur.get('team',{}).get('abbreviation'),'description':cur.get('description'),'lastPlays':[{'text':p.get('text'),'clock':p.get('clock')} for p in cur.get('plays',[])[-3:]]},separators=(',',':'))[:1000])
-          s=json.load(open('scores.json'));e=next((x for x in s.get('events',[]) if x.get('id')=='401873069'),{})
+          if isinstance(cur,dict):print('DRIVE',json.dumps({'team':cur.get('team',{}).get('abbreviation'),'description':cur.get('description'),'lastPlays':[{'text':p.get('text'),'clock':p.get('clock')} for p in cur.get('plays',[])[-4:]]},separators=(',',':'))[:1800])
+          s=json.load(open('scores.json'));e=next((x for x in s.get('events',[]) if x.get('id')=='401873075'),{})
           z=(e.get('competitions') or [{}])[0];t=e.get('status',{});sit=z.get('situation') or {}
           print('LIVE',json.dumps({'status':t.get('type',{}).get('detail'),'period':t.get('period'),'clock':t.get('displayClock'),'teams':[{'abbrev':x.get('team',{}).get('abbreviation'),'score':x.get('score')} for x in z.get('competitors',[])],'possessionId':sit.get('possession'),'down':sit.get('downDistanceText'),'lastPlay':(sit.get('lastPlay') or {}).get('text'),'winProb':(sit.get('lastPlay') or {}).get('probability'),'odds':z.get('odds')},separators=(',',':'))[:1800])
           p=json.load(open('pack.json'))
-          print('PACKMETA',json.dumps({'generated':p.get('generatedAt'),'freshness':p.get('freshness'),'results':{k:v for k,v in p.get('results',{}).items() if k!='games'}},separators=(',',':'))[:1800])
-          g=next(x for x in p.get('outlooks',{}).get('games',[]) if x.get('awayTeam')=='Jacksonville Jaguars')
+          print('PACKMETA',json.dumps({'generated':p.get('generatedAt'),'freshness':p.get('freshness'),'results':{k:v for k,v in p.get('results',{}).items() if k!='games'}},separators=(',',':'))[:1650])
+          g=next(x for x in p.get('outlooks',{}).get('games',[]) if x.get('awayTeam')=='Las Vegas Raiders')
           foc=next((x for x in p.get('focus',{}).get('games',[]) if x.get('gameId')==g.get('gameId')),None)
-          print('BRAIN',json.dumps({'classification':g.get('classification'),'spread':g.get('spread'),'market':g.get('market'),'movement':g.get('movement'),'history':g.get('history'),'context':g.get('context'),'openingSignal':g.get('openingSignal'),'currentSignal':g.get('currentSignal'),'signalChange':g.get('signalChange'),'focus':foc},separators=(',',':'))[:11000])
+          hist=g.get('history') or {}
+          print('BRAIN',json.dumps({'classification':g.get('classification'),'spread':g.get('spread'),'market':g.get('market'),'movement':g.get('movement'),'history':{'evidence':hist.get('evidence'),'evidenceSummary':hist.get('evidenceSummary'),'situational':hist.get('situational'),'situationalSummary':hist.get('situationalSummary')},'context':g.get('context'),'openingSignal':g.get('openingSignal'),'currentSignal':g.get('currentSignal'),'signalChange':g.get('signalChange'),'focus':foc},separators=(',',':'))[:13500])
           pulse=p.get('dashboard',{}).get('seasonPulse',{})
-          for k in ('AwayFav|<=7','HomeDog|<=7'):
+          for k in ('AwayDog|>7','HomeFav|>7'):
             rows=pulse.get('momentum',{}).get(k,[])
             print('TIER',json.dumps({'key':k,'weekly':[{'week':v.get('week'),'wins':v.get('weekly',{}).get('wins'),'losses':v.get('weekly',{}).get('losses'),'pushes':v.get('weekly',{}).get('pushes'),'rate':v.get('weekly',{}).get('coverRate')} for v in rows if v.get('week')>=8],'overall':pulse.get('buckets',{}).get(k)},separators=(',',':')))
           PY
