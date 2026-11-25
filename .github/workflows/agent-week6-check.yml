@@ -1,39 +1,27 @@
-name: Week 12 Pool Picks Production Brain Audit
+name: Week 12 Tier Trend and Pool Picks Refresh
 on:
   push:
     branches: [agent-week6-check-20261017]
 permissions:
   contents: read
 jobs:
-  audit:
+  refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch live production brain weeks 8 through 12
+      - name: Read week 12 production Brain and trend history
         run: |
           date -u "+CAPTURE_UTC %Y-%m-%dT%H:%M:%SZ"
-          for w in 8 9 10 11 12; do
-            curl -fsSL --max-time 25 --retry 1 "https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=$w" -o "w$w.json" || echo "FETCH_FAILED $w"
-          done
+          curl -fsSL --max-time 26 --retry 1 'https://nfl-spread-api.sanro4.workers.dev/api/analyst/weekly-pack?season=2026&week=12' -o p.json
           python - <<'PY'
-          import json,os
-          packs={w:json.load(open('w%d.json'%w)) for w in (8,9,10,11,12) if os.path.exists('w%d.json'%w)}
-          for w,p in packs.items():
-            f=p.get('freshness',{});r=p.get('results',{})
-            print('META',json.dumps({'w':w,'generated':p.get('generatedAt'),'freshness':{k:{'age':v.get('ageMinutes'),'updatedAt':v.get('updatedAt'),'status':v.get('status')} for k,v in f.get('sources',{}).items()},'results':{k:v for k,v in r.items() if k!='games'}},separators=(',',':'))[:1500])
-          p=packs[12]
-          d=p.get('dashboard',{}).get('seasonPulse',{})
-          for k,entries in d.get('momentum',{}).items():
-            print('TIER',json.dumps({'key':k,'overall':d.get('buckets',{}).get(k),'weekly':[{'week':v.get('week'),'wins':v.get('weekly',{}).get('wins'),'losses':v.get('weekly',{}).get('losses'),'pushes':v.get('weekly',{}).get('pushes'),'rate':v.get('weekly',{}).get('coverRate')} for v in entries if v.get('week',0)>=8]},separators=(',',':')))
-          for s in (p.get('signalPerformance') or {}).get('signals',[]):
-            print('SIGNAL',json.dumps({'id':s.get('id'),'wins':s.get('wins'),'losses':s.get('losses'),'rate':s.get('rate'),'lastWeeks':[v for v in s.get('weeks',[]) if v.get('week',0)>=8]},separators=(',',':'))[:2100])
-          games=p.get('outlooks',{}).get('games',[])
-          focuses={g.get('gameId'):g for g in (p.get('focus',{}).get('games',[]) or [])}
-          print('COUNT',len(games))
-          for g in games:
-            h=g.get('history') or {};x=g.get('spread') or {};mov=g.get('movement') or {};fr=focuses.get(g.get('gameId')) or {}
-            print('GAME',json.dumps({'id':g.get('gameId'),'away':g.get('awayTeam'),'home':g.get('homeTeam'),'kickoff':g.get('kickoffAt'),'classification':g.get('classification'),'spread':x,'market':g.get('market'),'openingSignal':g.get('openingSignal'),'currentSignal':g.get('currentSignal'),'movement':{'first':mov.get('firstCapturedAwaySpread'),'current':mov.get('currentAwaySpread'),'strength':mov.get('movementMagnitude'),'direction':mov.get('direction'),'marketAlignment':mov.get('marketAlignment'),'moneyline':mov.get('moneyline')},'history':{'evidence':h.get('evidence'),'situational':h.get('situational')},'focus':{'focus':fr.get('focus'),'team':fr.get('team'),'opportunity':fr.get('opportunity'),'bestUse':fr.get('bestUse'),'edge':fr.get('edge'),'conflict':fr.get('conflict')},'contextQuality':(g.get('context') or {}).get('quality')},separators=(',',':'))[:12500])
-          for w in (10,11):
-            p=packs[w]
-            for g in (p.get('results') or {}).get('games',[]):
-              print('RESULT',json.dumps({'w':w,'id':g.get('id'),'home':g.get('homeTeam'),'away':g.get('awayTeam'),'scores':[g.get('awayScore'),g.get('homeScore')],'status':g.get('status')},separators=(',',':'))[:550])
+          import json
+          p=json.load(open('p.json'))
+          f=p.get('freshness',{})
+          print('META',json.dumps({'generated':p.get('generatedAt'),'freshness':{k:{'status':v.get('status'),'at':v.get('updatedAt')} for k,v in f.get('sources',{}).items()}},separators=(',',':')))
+          pulse=(p.get('dashboard') or {}).get('seasonPulse') or {}
+          for k,a in pulse.get('momentum',{}).items():
+            print('TIER',json.dumps({'key':k,'overall':pulse.get('buckets',{}).get(k),'weeks':[{'week':x.get('week'),'wins':x.get('weekly',{}).get('wins'),'losses':x.get('weekly',{}).get('losses'),'pushes':x.get('weekly',{}).get('pushes')} for x in a if x.get('week',0)>=8]},separators=(',',':')))
+          for g in (p.get('outlooks') or {}).get('games',[]):
+            ev=(g.get('history') or {}).get('evidence') or []
+            m=g.get('movement') or {};s=g.get('spread') or {}
+            print('GAME',json.dumps({'away':g.get('awayTeam'),'home':g.get('homeTeam'),'spread':s.get('away'),'category':g.get('classification'),'winAway':(g.get('market') or {}).get('awayWinPct'),'tierPick':s.get('projectedTeam'),'tierRate':s.get('coverRate'),'grade':s.get('grade'),'first':m.get('firstCapturedAwaySpread'),'current':m.get('currentAwaySpread'),'marketAlign':m.get('marketAlignment'),'hist':[{'team':v.get('team'),'label':v.get('label'),'rate':v.get('coverPct'),'games':v.get('games'),'relation':v.get('relationship')} for v in ev]},separators=(',',':')))
           PY
